@@ -1,0 +1,86 @@
+# NeON build file https://github.com/c4s4/neon
+
+default: [start]
+
+properties:
+  DOCKER_NAME: 'casa/openai-webui'
+  USER_HOST:   'casa@gollum'
+  DIRECTORY:   '/home/casa/openai-webui/'
+
+targets:
+
+  stop:
+    doc: "Stop service"
+    steps:
+    - $: [docker, compose, down]
+
+  start:
+    doc: "Start service"
+    depends: [image, stop]
+    steps:
+    - $: [docker, compose, up, -d]
+
+  logs:
+    doc: "Print logs"
+    steps:
+    - $: [docker, compose, logs, -f]
+
+  image:
+    doc: "Build Docker image locally"
+    steps:
+    - $: >
+        docker build
+        --tag '={DOCKER_NAME}:latest'
+        .
+
+  dirty:
+    doc: "Check that repository is not dirty"
+    steps:
+    - $: ['git', 'status', '--porcelain']
+      1=: dirty
+      1x: true
+    - if: 'dirty != ""'
+      then:
+      - throw: "Working copy is not clean"
+
+  version:
+    doc: "Prompt for release version"
+    steps:
+    - $: ['git', 'tag']
+      1=: tags
+      1x: true
+    - |
+      tags = split(tags, "\n")
+      sortversions(tags)
+    - print: 'Last tags: ={join(tags, ", ")}'
+    - prompt: "Enter release version"
+      to: VERSION
+    - if: 'contains(tags, VERSION)'
+      then:
+      - throw: "Tag '={VERSION}' already exists"
+
+  push:
+    doc: "Build and push Docker image on Docker Hub"
+    depends: [version]
+    steps:
+    - $: >
+        docker buildx build
+        --builder multi-platform-builder
+        --platform linux/amd64,linux/arm64
+        --tag '={DOCKER_NAME}:={VERSION}'
+        --tag '={DOCKER_NAME}:latest'
+        --push .
+
+  release:
+    doc: "Perform a release"
+    depends: [dirty, push]
+    steps:
+    - $: [git, tag, =VERSION]
+    - $: [git, push, --tags]
+
+  deploy:
+    doc: "Deploy application on server"
+    steps:
+    - $: 'ssh ={USER_HOST} "cd ={DIRECTORY} && docker compose down"'
+    - $: 'scp .env compose.yml ={USER_HOST}:={DIRECTORY}'
+    - $: 'ssh ={USER_HOST} "cd ={DIRECTORY} && docker compose pull && docker compose up -d"'

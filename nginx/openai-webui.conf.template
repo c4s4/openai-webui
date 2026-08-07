@@ -1,0 +1,83 @@
+# OpenAI WebUI — NGinX site configuration.
+#
+# A template, not a ready-to-use configuration: the NGinX image renders it into
+# /etc/nginx/conf.d/default.conf on every start, substituting the two variables
+# below. They are set in the Compose file, so the image needs no rebuild and the
+# API key never has to be committed:
+#
+#   OPENAI_API_BASE_URL   base URL of the OpenAI-compatible API
+#   OPENAI_AUTHORIZATION  Authorization header, derived from OPENAI_API_KEY by
+#                         docker-entrypoint.d/15-openai-webui.envsh (empty when
+#                         no key is set, which drops the header entirely)
+#
+# Only names starting with OPENAI_ are substituted (NGINX_ENVSUBST_FILTER), so
+# NGinX's own $variables come through untouched.
+#
+# This file is included from the http context (conf.d), which is why the map
+# below sits outside the server block.
+
+# Endpoint allowlist: only what the UI calls is proxied, so this never becomes
+# an open, pre-authenticated proxy to the whole API.
+map "$request_method:$uri" $openai_endpoint_allowed {
+    default                        0;
+    "GET:/api/models"              1;
+    "POST:/api/chat/completions"   1;
+}
+
+server {
+    listen 80;
+    listen [::]:80;
+    server_name _;
+
+    root /var/www/openai-webui;
+    index index.html;
+
+    # Base64-encoded attachments inflate the request body (~1.37x).
+    client_max_body_size 32m;
+
+    gzip on;
+    gzip_types text/css application/javascript application/json;
+
+    location / {
+        try_files $uri $uri/ /index.html;
+    }
+
+    location = /index.html {
+        add_header Cache-Control "no-store" always;
+    }
+
+    location /assets/ {
+        add_header Cache-Control "public, max-age=3600" always;
+    }
+
+    # Reverse proxy to the API: the key stays server-side and is never exposed
+    # to the browser.
+    location /api/ {
+        if ($openai_endpoint_allowed = 0) {
+            return 404;
+        }
+
+        # The trailing slash of the base URL is what maps /api/… onto the base
+        # path (/api/models -> /v1/models); the entrypoint adds it if missing.
+        proxy_pass ${OPENAI_API_BASE_URL};
+        proxy_set_header Authorization "${OPENAI_AUTHORIZATION}";
+
+        proxy_http_version 1.1;
+        proxy_set_header Accept-Encoding "";
+        proxy_set_header Connection "";
+        proxy_hide_header Access-Control-Allow-Origin;
+
+        # TLS to the upstream: SNI plus certificate verification. Harmless when
+        # the upstream is plain HTTP.
+        proxy_ssl_server_name on;
+        proxy_ssl_verify on;
+        proxy_ssl_verify_depth 3;
+        proxy_ssl_trusted_certificate /etc/ssl/certs/ca-certificates.crt;
+
+        # Token streaming: no buffering, and room for slow completions.
+        proxy_buffering off;
+        proxy_cache off;
+        proxy_read_timeout 600s;
+        proxy_send_timeout 600s;
+    }
+}

@@ -1,0 +1,21 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24">
+  <!-- The same two sparks as the reasoning icon of assets/app.js, redrawn for a
+       16px tab: the paths are scaled up to fill the viewBox and the strokes
+       thickened, since the original sits inline in a line of text and would
+       shrink to a smudge here. The colours are inlined rather than taken from
+       the stylesheet, which a favicon never sees; the tab background follows the
+       browser theme, hence the media query. -->
+  <style>
+    /* The default is the mid grey of the interface, legible on a light tab bar
+       as on a dark one: a browser that ignores media queries inside a favicon
+       (Safari does) keeps it rather than disappearing into the background. The
+       two queries then take it to full contrast wherever they are honoured. */
+    :root { --ink: #71717a; }
+    @media (prefers-color-scheme: light) { :root { --ink: #18181b; } }
+    @media (prefers-color-scheme: dark) { :root { --ink: #ececec; } }
+  </style>
+  <g fill="none" stroke="var(--ink)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M9.4 1.8l2.1 5.4 5.4 2.1-5.4 2.1-2.1 5.4-2.1-5.4L1.9 9.3l5.4-2.1Z" />
+    <path d="M17.8 14.6l1.1 2.8 2.8 1.1-2.8 1.1-1.1 2.8-1.1-2.8-2.8-1.1 2.8-1.1Z" />
+  </g>
+</svg>

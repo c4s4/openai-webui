@@ -1,0 +1,41 @@
+MIT License
+
+Copyright (c) 2026 Michel Casabianca
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
+
+---
+
+This project embeds third-party libraries in assets/vendor/, each under its own
+license. Their copyright notices are preserved in the distributed files:
+
+- marked 15.0.12 — MIT License — Copyright (c) 2011-2025, Christopher Jeffrey
+  https://github.com/markedjs/marked/blob/master/LICENSE.md
+
+- highlight.js 11.11.1, including the GitHub themes — BSD 3-Clause License —
+  Copyright (c) 2006-2024, Josh Goebel and other contributors
+  https://github.com/highlightjs/highlight.js/blob/main/LICENSE
+
+- DOMPurify 3.2.6 — Apache License 2.0 or Mozilla Public License 2.0 —
+  Copyright (c) Cure53 and other contributors
+  https://github.com/cure53/DOMPurify/blob/main/LICENSE
+
+- pdf.js (pdfjs-dist) 6.2.108 — Apache License 2.0 —
+  Copyright Mozilla Foundation and other contributors
+  https://github.com/mozilla/pdf.js/blob/master/LICENSE

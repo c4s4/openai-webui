@@ -1,0 +1,29 @@
+#!/bin/sh
+# Prepares the variables that openai-webui.conf.template needs.
+#
+# Sourced — not executed — by the NGinX entrypoint (hence the .envsh suffix and
+# the 15- prefix, which puts it before 20-envsubst-on-templates.sh), so the
+# exports below reach the envsubst pass that renders the template.
+
+# A missing base URL would render as an empty proxy_pass and NGinX would refuse
+# to start on a syntax error; say what is actually wrong instead.
+if [ -z "${OPENAI_API_BASE_URL:-}" ]; then
+    echo >&2 "$0: ERROR: OPENAI_API_BASE_URL is not set — see the .env file"
+    exit 1
+fi
+
+# The trailing slash is what maps /api/… onto the base path of the API; adding
+# it here spares the classic misconfiguration (/api/models proxied as-is).
+case "$OPENAI_API_BASE_URL" in
+    */) ;;
+    *) OPENAI_API_BASE_URL="$OPENAI_API_BASE_URL/" ;;
+esac
+export OPENAI_API_BASE_URL
+
+# An empty Authorization header is not sent at all, which is what a local
+# backend without authentication expects.
+if [ -n "${OPENAI_API_KEY:-}" ]; then
+    export OPENAI_AUTHORIZATION="Bearer $OPENAI_API_KEY"
+else
+    export OPENAI_AUTHORIZATION=""
+fi

@@ -1,0 +1,837 @@
+:root {
+  --bg: #ffffff;
+  --bg-soft: #f4f4f5;
+  --bg-sunken: #ebebed; /* recessed panels: darker than the page */
+  --bg-elevated: #ffffff;
+  --border: #e4e4e7;
+  --text: #18181b;
+  --text-muted: #71717a;
+  --accent: #18181b;
+  --accent-text: #ffffff;
+  --danger: #b91c1c;
+  --radius: 16px;
+  --composer-max: 760px;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #212121;
+    --bg-soft: #2f2f2f;
+    --bg-sunken: #171717;
+    --bg-elevated: #303030;
+    --border: #414141;
+    --text: #ececec;
+    --text-muted: #a3a3a3;
+    --accent: #ececec;
+    --accent-text: #212121;
+    --danger: #f87171;
+  }
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  height: 100%;
+  margin: 0;
+}
+
+body {
+  display: flex;
+  flex-direction: column;
+  background: var(--bg);
+  color: var(--text);
+  font: 16px/1.6 ui-sans-serif, system-ui, -apple-system, "Segoe UI", Helvetica, Arial, sans-serif;
+}
+
+/* ---------- Topbar ---------- */
+
+.topbar {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 16px;
+  border-bottom: 1px solid var(--border);
+  background: var(--bg);
+}
+
+/* Larger than the controls it sits next to, so the bar reads as a title followed
+   by its settings rather than as three items of equal weight. */
+.brand {
+  font-size: 24px;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+}
+
+/* Anchors the panel, which is positioned against the gear button rather than
+   against the page. */
+.options {
+  position: relative;
+}
+
+/* Worn by the first of the two buttons of the bar, which pushes itself and the
+   one after it against the right edge. */
+.push-right {
+  margin-left: auto;
+}
+
+/* Hangs under the gear, ended on its right edge — which is the right edge of the
+   bar, the gear being the last control there — and above the thread it covers.
+   The ceiling on the width is what keeps its left side inside a narrow screen,
+   where the panel is nearly as wide as the page. */
+.options-menu {
+  position: absolute;
+  top: calc(100% + 8px);
+  right: 0;
+  z-index: 10;
+  display: grid;
+  gap: 10px;
+  min-width: 300px;
+  max-width: min(360px, calc(100vw - 32px));
+  padding: 14px;
+  background: var(--bg-elevated);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  box-shadow: 0 8px 24px rgb(0 0 0 / 12%);
+}
+
+/* `display: grid` above beats the `hidden` attribute, which the browser applies
+   through a rule of its own the author sheet overrides: the panel has to be
+   hidden here or it never closes. */
+.options-menu[hidden] {
+  display: none;
+}
+
+.picker {
+  position: relative;
+}
+
+/* One row of the panel: the name on the left, the select against the right edge,
+   so the four selects line up whatever the length of their labels. The name sits
+   outside the select, which keeps the options bare words — "Auto", "Text",
+   "Image" rather than "PDF: auto". */
+.option {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.picker-label {
+  color: var(--text-muted);
+  font-size: 13px;
+}
+
+/* Own chevron rather than the native one, whose spacing cannot be controlled.
+   A pseudo-element on the label, since a select cannot host one. */
+.picker::after {
+  content: "";
+  position: absolute;
+  right: 15px;
+  top: 50%;
+  width: 8px;
+  height: 8px;
+  margin-top: -6px;
+  border: solid var(--text-muted);
+  border-width: 0 1.5px 1.5px 0;
+  transform: rotate(45deg);
+  pointer-events: none;
+}
+
+select {
+  -webkit-appearance: none;
+  appearance: none;
+  font: inherit;
+  color: var(--text);
+  background: var(--bg-soft);
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  padding: 7px 14px;
+  cursor: pointer;
+  /* Room for the chevron above: 15px margin + 8px arrow + 12px gap. */
+  padding-right: 35px;
+  text-overflow: ellipsis;
+}
+
+/* One fixed width for the four, rather than each taking what its label leaves:
+   the panel then reads as a column of identical controls instead of four boxes
+   of four different widths. A long translation widens the panel instead, up to
+   its ceiling, past which the label is the one to give ground. A model identifier
+   longer than the box is ellipsised — hence the `min-width: 0`, without which the
+   automatic minimum size of a flex item would let the select grow to its widest
+   option and push the row past its own width. */
+.option select {
+  flex: none;
+  width: 190px;
+  min-width: 0;
+}
+
+select:hover {
+  border-color: var(--text-muted);
+}
+
+/* Two round buttons and the title: the bar holds on any screen, and only the
+   title gives ground on a very narrow one. */
+@media (max-width: 420px) {
+  .brand {
+    font-size: 19px;
+  }
+}
+
+/* ---------- Icon buttons ---------- */
+
+/* Round, the icon centred in it, and muted until hovered: the shape of every
+   button of the interface, in the bar as in the composer. */
+.icon-button {
+  flex: none;
+  width: 36px;
+  height: 36px;
+  display: grid;
+  place-items: center;
+  border: 0;
+  border-radius: 50%;
+  background: transparent;
+  color: var(--text-muted);
+  cursor: pointer;
+}
+
+.icon-button:hover:not(:disabled) {
+  background: var(--bg-soft);
+  color: var(--text);
+}
+
+.icon-button svg {
+  width: 20px;
+  height: 20px;
+}
+
+/* Worn by the two buttons of the bar, which stand on their own rather than
+   inside a box of their own: the outline is what makes them read as buttons
+   there, and it answers the outline of the selects in the panel below. */
+.icon-button.outlined {
+  border: 1px solid var(--border);
+  background: var(--bg-soft);
+  color: var(--text);
+}
+
+.icon-button.outlined:hover:not(:disabled) {
+  border-color: var(--text-muted);
+}
+
+.icon-button:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+/* ---------- Thread ---------- */
+
+.thread {
+  flex: 1;
+  overflow-y: auto;
+  /* Just enough bottom padding for the last line of an answer not to sit flush
+     against the composer; the message's own bottom margin adds to it. */
+  padding: 28px 16px 4px;
+}
+
+.empty-state {
+  max-width: var(--composer-max);
+  margin: 12vh auto 0;
+  text-align: center;
+  color: var(--text-muted);
+}
+
+.empty-state h1 {
+  color: var(--text);
+  font-size: 28px;
+  font-weight: 600;
+  margin: 0 0 8px;
+}
+
+.message {
+  max-width: var(--composer-max);
+  margin: 0 auto 20px;
+  display: flex;
+}
+
+/* Column, so the copy button stacks under the bubble instead of pushing it
+   left: the right edge of a prompt stays flush with the reasoning panel and the
+   composer. */
+.message.user {
+  flex-direction: column;
+  align-items: flex-end;
+  /* The copy button already adds its own gap under the bubble, so the standard
+     margin between messages would read as too much space here. */
+  margin-bottom: 0;
+}
+
+.bubble {
+  white-space: pre-wrap;
+  word-break: break-word;
+  border-radius: var(--radius);
+}
+
+.message.user .bubble {
+  background: var(--bg-soft);
+  padding: 10px 16px;
+  max-width: 85%;
+}
+
+.message.assistant .bubble {
+  padding: 2px 0;
+  /* Full column width from the first token: otherwise the bubble is
+     shrink-to-fit and the reasoning panel would widen as text arrives. */
+  width: 100%;
+}
+
+.message.error .bubble {
+  color: var(--danger);
+  border: 1px solid var(--danger);
+  padding: 10px 16px;
+}
+
+.bubble .files {
+  margin: 6px 0 0;
+  padding: 0;
+  list-style: none;
+  font-size: 13px;
+  color: var(--text-muted);
+}
+
+/* ---------- Answer footer ---------- */
+
+.message-footer {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap; /* narrow screens: metrics drop below rather than squeeze the button */
+  gap: 12px;
+  margin-top: 10px;
+}
+
+/* `nowrap` and `flex-shrink: 0` keep the label whole: on a narrow screen the
+   footer would otherwise squeeze the button and break "Copier" mid-word. */
+.copy-button {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  flex-shrink: 0;
+  white-space: nowrap;
+  font: inherit;
+  font-size: 12px;
+  color: var(--text-muted);
+  background: transparent;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 3px 8px;
+  cursor: pointer;
+}
+
+.copy-button:hover {
+  color: var(--text);
+  border-color: var(--text-muted);
+}
+
+.copy-button svg {
+  width: 13px;
+  height: 13px;
+}
+
+/* Click feedback: the copy icon gives way to a check mark that pops in, and a
+   failed copy shakes instead. */
+.copy-button .icon-check {
+  display: none;
+}
+
+.copy-button.copied .icon-copy {
+  display: none;
+}
+
+.copy-button.copied .icon-check {
+  display: block;
+}
+
+.copy-button.copied {
+  color: var(--text);
+  opacity: 1;
+}
+
+.copy-button.copied svg {
+  animation: copy-pop 0.32s ease;
+}
+
+.copy-button.failed svg {
+  animation: copy-shake 0.3s ease;
+}
+
+@keyframes copy-pop {
+  0% {
+    transform: scale(0.4);
+    opacity: 0;
+  }
+  60% {
+    transform: scale(1.25);
+    opacity: 1;
+  }
+}
+
+@keyframes copy-shake {
+  25% {
+    transform: translateX(-2px);
+  }
+  75% {
+    transform: translateX(2px);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .copy-button.copied svg,
+  .copy-button.failed svg {
+    animation: none;
+  }
+}
+
+/* Icon-only variant pinned to the top-right of a code block. Sits on the
+   wrapper, not on the scrolling `pre`, so it stays put on long lines. */
+.code-block {
+  position: relative;
+  margin: 0 0 12px;
+}
+
+.code-block pre {
+  margin: 0;
+}
+
+.code-copy {
+  position: absolute;
+  top: 6px;
+  right: 6px;
+  padding: 4px;
+  background: var(--bg);
+  opacity: 0.55;
+  transition: opacity 0.15s;
+}
+
+.code-block:hover .code-copy,
+.code-copy:focus-visible {
+  opacity: 1;
+}
+
+/* Icon-only variant under the right edge of a prompt: discreet, so it never
+   competes with the bubble it belongs to. */
+.prompt-copy {
+  flex: none;
+  margin-top: 3px;
+  padding: 4px;
+  border-color: transparent;
+  opacity: 0.6;
+}
+
+.prompt-copy:hover {
+  opacity: 1;
+}
+
+.metrics {
+  /* Sits inline with the copy button, so no top margin of its own. */
+  margin: 0;
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+  color: var(--text-muted);
+  cursor: help;
+}
+
+/* ---------- Answer header ---------- */
+
+.answer-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 10px;
+}
+
+.model-name {
+  font-size: 13px;
+  color: var(--text-muted);
+}
+
+/* ---------- Reasoning ---------- */
+
+.reasoning {
+  margin: 0 0 14px;
+  background: var(--bg-sunken);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 6px 12px;
+}
+
+.reasoning summary {
+  display: flex;
+  align-items: center;
+  gap: 3px;
+  list-style: none;
+  /* The line is inert; only the handle takes clicks, so folding never happens
+     on a stray click beside it. */
+  pointer-events: none;
+}
+
+.reasoning summary::-webkit-details-marker {
+  display: none;
+}
+
+.reasoning-handle {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  pointer-events: auto;
+  cursor: pointer;
+  color: var(--text-muted);
+  transition: transform 0.15s;
+}
+
+/* Same height as the sparkles icon it sits next to. */
+.reasoning-handle svg {
+  width: 18px;
+  height: 18px;
+}
+
+.reasoning-handle:hover {
+  color: var(--text);
+}
+
+.reasoning[open] .reasoning-handle {
+  transform: rotate(90deg);
+}
+
+/* Purely decorative: it labels the panel, the handle alone opens it. */
+.reasoning-sparkles {
+  display: inline-flex;
+  color: var(--text-muted);
+}
+
+.reasoning-sparkles svg {
+  width: 18px;
+  height: 18px;
+}
+
+.reasoning-body {
+  margin-top: 6px;
+  font-size: 14px;
+  color: var(--text-muted);
+  max-height: 320px;
+  overflow-y: auto;
+}
+
+.spinner {
+  display: inline-block;
+  flex: none;
+  width: 15px;
+  height: 15px;
+  vertical-align: -2px;
+  border: 2px solid var(--border);
+  border-top-color: var(--text-muted);
+  border-radius: 50%;
+  animation: spin 0.7s linear infinite;
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(1turn);
+  }
+}
+
+/* Respect the system setting: pulse instead of spin. */
+@media (prefers-reduced-motion: reduce) {
+  .spinner {
+    animation: pulse 1.4s ease-in-out infinite;
+  }
+
+  @keyframes pulse {
+    50% {
+      opacity: 0.3;
+    }
+  }
+}
+
+/* The cursor trails the last rendered block, so it stays on the text line
+   instead of dropping below it. */
+.cursor > :last-child::after {
+  content: "▍";
+  animation: blink 1s steps(2, start) infinite;
+}
+
+/* ---------- Rendered Markdown ---------- */
+
+/* Markdown output carries its own block structure: pre-wrap, still used for the
+   raw text of user messages, would double every line break here. */
+.answer,
+.reasoning-body {
+  white-space: normal;
+}
+
+.answer > :first-child,
+.reasoning-body > :first-child {
+  margin-top: 0;
+}
+
+.answer > :last-child,
+.reasoning-body > :last-child {
+  margin-bottom: 0;
+}
+
+.answer p,
+.reasoning-body p {
+  margin: 0 0 12px;
+}
+
+.answer h1,
+.answer h2,
+.answer h3,
+.answer h4,
+.answer h5,
+.answer h6 {
+  margin: 20px 0 10px;
+  line-height: 1.3;
+}
+
+.answer h1 { font-size: 1.5em; }
+.answer h2 { font-size: 1.3em; }
+.answer h3 { font-size: 1.15em; }
+.answer h4,
+.answer h5,
+.answer h6 { font-size: 1em; }
+
+.answer ul,
+.answer ol,
+.reasoning-body ul,
+.reasoning-body ol {
+  margin: 0 0 12px;
+  padding-left: 24px;
+}
+
+.answer li,
+.reasoning-body li {
+  margin: 3px 0;
+}
+
+.answer li > ul,
+.answer li > ol {
+  margin: 3px 0;
+}
+
+.answer blockquote,
+.reasoning-body blockquote {
+  margin: 0 0 12px;
+  padding-left: 12px;
+  border-left: 3px solid var(--border);
+  color: var(--text-muted);
+}
+
+.answer code,
+.reasoning-body code {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 0.9em;
+  background: var(--bg-soft);
+  border: 1px solid var(--border);
+  border-radius: 5px;
+  padding: 1px 5px;
+}
+
+.answer pre,
+.reasoning-body pre {
+  margin: 0 0 12px;
+  padding: 12px 14px;
+  background: var(--bg-soft);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  /* Long lines scroll inside the block; the page never scrolls sideways. */
+  overflow-x: auto;
+}
+
+.answer pre code,
+.reasoning-body pre code {
+  background: none;
+  border: 0;
+  padding: 0;
+  font-size: 0.875em;
+  white-space: pre;
+}
+
+/* Token colours come from the vendored highlight.js theme; the block chrome
+   stays ours, so the theme's own background and padding are overridden. */
+.answer pre code.hljs,
+.reasoning-body pre code.hljs {
+  background: none;
+  padding: 0;
+}
+
+/* GFM task lists. */
+.answer input[type="checkbox"] {
+  margin: 0 6px 0 0;
+  vertical-align: -1px;
+}
+
+.answer table {
+  margin: 0 0 12px;
+  border-collapse: collapse;
+  display: block;
+  overflow-x: auto;
+  max-width: 100%;
+}
+
+.answer th,
+.answer td {
+  border: 1px solid var(--border);
+  padding: 6px 10px;
+  text-align: left;
+}
+
+.answer th {
+  background: var(--bg-soft);
+  font-weight: 600;
+}
+
+.answer hr {
+  margin: 18px 0;
+  border: 0;
+  border-top: 1px solid var(--border);
+}
+
+.answer a,
+.reasoning-body a {
+  color: inherit;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+.answer img {
+  max-width: 100%;
+}
+
+@keyframes blink {
+  to {
+    visibility: hidden;
+  }
+}
+
+/* ---------- Composer ---------- */
+
+.composer-wrapper {
+  padding: 8px 16px 18px;
+  background: var(--bg);
+}
+
+.composer {
+  max-width: var(--composer-max);
+  margin: 0 auto;
+  background: var(--bg-elevated);
+  border: 1px solid var(--border);
+  border-radius: 24px;
+  padding: 5px;
+  box-shadow: 0 2px 12px rgb(0 0 0 / 6%);
+}
+
+.composer-row {
+  display: flex;
+  align-items: flex-end;
+  gap: 4px;
+}
+
+.prompt {
+  flex: 1;
+  font: inherit;
+  color: inherit;
+  background: transparent;
+  border: 0;
+  resize: none;
+  max-height: 200px;
+  /* Kept just under the 36px buttons, so they set the bar height. */
+  line-height: 1.45;
+  padding: 6px 4px;
+  outline: none;
+}
+
+.icon-button.send {
+  background: var(--accent);
+  color: var(--accent-text);
+}
+
+/* Send / stop toggle: both icons live in the markup, CSS picks one. */
+.icon-stop {
+  display: none;
+}
+
+.icon-button.stop .icon-send {
+  display: none;
+}
+
+.icon-button.stop .icon-stop {
+  display: block;
+}
+
+.icon-button.send:hover:not(:disabled) {
+  opacity: 0.85;
+}
+
+/* A bare `display: flex` would override the hidden attribute, leaving an empty
+   strip above the prompt when nothing is attached. */
+.attachments[hidden] {
+  display: none;
+}
+
+.attachments {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  list-style: none;
+  margin: 4px 4px 8px;
+  padding: 0;
+}
+
+.attachments li {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  background: var(--bg-soft);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 5px 6px 5px 10px;
+  max-width: 320px;
+}
+
+.attachments .name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* Shape a PDF took (text or images): secondary, and never at the expense of
+   the file name, which is what identifies the chip. */
+.attachments .note {
+  flex: none;
+  color: var(--text-muted);
+  font-size: 12px;
+  white-space: nowrap;
+}
+
+.attachments button {
+  border: 0;
+  background: transparent;
+  color: var(--text-muted);
+  cursor: pointer;
+  font-size: 15px;
+  line-height: 1;
+}
+
+.status {
+  max-width: var(--composer-max);
+  margin: 8px auto 0;
+  min-height: 18px;
+  font-size: 13px;
+  color: var(--text-muted);
+  text-align: center;
+}
+
+.status.error {
+  color: var(--danger);
+}

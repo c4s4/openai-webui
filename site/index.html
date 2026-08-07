@@ -1,0 +1,180 @@
+<!DOCTYPE html>
+<!-- Texts in English here, and `lang` with them, are only what shows before the
+     first frame: assets/i18n.js translates the markup and rewrites `lang` on
+     load, from the remembered choice or the browser's preference. -->
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>OpenAI WebUI</title>
+    <link rel="icon" href="/assets/favicon.svg" type="image/svg+xml" />
+    <!-- highlight.js themes, before our own sheet so it can override them. -->
+    <link
+      rel="stylesheet"
+      href="/assets/vendor/highlight-github.min.css"
+      media="(prefers-color-scheme: light)"
+    />
+    <link
+      rel="stylesheet"
+      href="/assets/vendor/highlight-github-dark.min.css"
+      media="(prefers-color-scheme: dark)"
+    />
+    <link rel="stylesheet" href="/assets/styles.css" />
+  </head>
+  <body>
+    <header class="topbar">
+      <div class="brand">OpenAI WebUI</div>
+      <button
+        id="new-chat"
+        class="icon-button outlined push-right"
+        type="button"
+        data-i18n-aria="newChat.title"
+        data-i18n-title="newChat.title"
+      >
+        <!-- Bin: lid, body and two slots, what "clear the conversation" looks
+             like everywhere else. -->
+        <svg viewBox="0 0 24 24" aria-hidden="true">
+          <path
+            d="M4 7h16M9.5 7V5a1.2 1.2 0 0 1 1.2-1.2h2.6A1.2 1.2 0 0 1 14.5 5v2M6.5 7l.9 12.1a1.2 1.2 0 0 0 1.2 1.1h6.8a1.2 1.2 0 0 0 1.2-1.1L17.5 7M10 11v5.5M14 11v5.5"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="1.7"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+          />
+        </svg>
+      </button>
+
+      <!-- The four settings live behind a button rather than in the bar: they are
+           chosen once and then left alone, so they cost a click instead of the
+           whole width of the row — which also spares the bar from folding into
+           two lines on a phone. The panel is a sibling of the button and
+           positioned against it, hence the relative wrapper. -->
+      <div class="options">
+        <button
+          id="options-button"
+          class="icon-button outlined"
+          type="button"
+          aria-expanded="false"
+          aria-controls="options-menu"
+          data-i18n-aria="options.label"
+          data-i18n-title="options.title"
+        >
+          <!-- Gear: eight teeth around a hub, the whole thing drawn as two
+               strokes so it holds up at 20px in both themes. -->
+          <svg viewBox="0 0 24 24" aria-hidden="true">
+            <path
+              d="M9.94 2.32L14.06 2.32L13.93 5.27L15.39 5.88L17.39 3.70L20.30 6.61L18.12 8.61L18.73 10.07L21.68 9.94L21.68 14.06L18.73 13.93L18.12 15.39L20.30 17.39L17.39 20.30L15.39 18.12L13.93 18.73L14.06 21.68L9.94 21.68L10.07 18.73L8.61 18.12L6.61 20.30L3.70 17.39L5.88 15.39L5.27 13.93L2.32 14.06L2.32 9.94L5.27 10.07L5.88 8.61L3.70 6.61L6.61 3.70L8.61 5.88L10.07 5.27Z"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="1.6"
+              stroke-linejoin="round"
+            />
+            <circle cx="12" cy="12" r="3.1" fill="none" stroke="currentColor" stroke-width="1.6" />
+          </svg>
+        </button>
+
+        <div id="options-menu" class="options-menu" role="group" data-i18n-aria="options.label" hidden>
+          <label class="picker option">
+            <span class="picker-label" data-i18n="model.label">Model</span>
+            <select id="model-select" data-i18n-aria="model.label">
+              <option value="" data-i18n="model.loading">Loading models…</option>
+            </select>
+          </label>
+          <label class="picker option">
+            <span class="picker-label" data-i18n="think.label">Thinking</span>
+            <select id="think-mode" data-i18n-aria="think.aria" data-i18n-title="think.title">
+              <option value="auto" data-i18n="think.auto">Auto</option>
+              <option value="off" data-i18n="think.off">Off</option>
+            </select>
+          </label>
+          <label class="picker option">
+            <span class="picker-label" data-i18n="pdf.label">PDF</span>
+            <select id="pdf-mode" data-i18n-aria="pdf.aria" data-i18n-title="pdf.title">
+              <option value="auto" data-i18n="pdf.auto">Auto</option>
+              <option value="text" data-i18n="pdf.text">Text</option>
+              <option value="image" data-i18n="pdf.image">Image</option>
+            </select>
+          </label>
+          <!-- Last of the panel, as the one setting that has nothing to do with
+               the conversation. Options filled from i18n.js: a flag and the name
+               of each language. -->
+          <label class="picker option">
+            <span class="picker-label" data-i18n="lang.label">Language</span>
+            <select id="lang-select" data-i18n-aria="lang.label"></select>
+          </label>
+        </div>
+      </div>
+
+    </header>
+
+    <main id="thread" class="thread" aria-live="polite">
+      <div id="empty-state" class="empty-state">
+        <h1 data-i18n="empty.title">How can I help you?</h1>
+        <p data-i18n="empty.subtitle">Pick a model, write a message, attach a file if you need to.</p>
+      </div>
+    </main>
+
+    <footer class="composer-wrapper">
+      <form id="composer" class="composer" autocomplete="off">
+        <ul id="attachments" class="attachments" hidden></ul>
+
+        <div class="composer-row">
+          <input id="file-input" type="file" multiple hidden />
+          <button
+            id="attach-button"
+            class="icon-button"
+            type="button"
+            data-i18n-title="attach.title"
+            data-i18n-aria="attach.title"
+          >
+            <svg viewBox="0 0 24 24" aria-hidden="true">
+              <path
+                d="M18.4 11.2 12 17.6a4.5 4.5 0 0 1-6.4-6.4l7.1-7.1a3 3 0 0 1 4.3 4.3l-7.1 7.1a1.5 1.5 0 0 1-2.2-2.2l6.4-6.3"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="1.7"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+              />
+            </svg>
+          </button>
+
+          <textarea
+            id="prompt"
+            class="prompt"
+            rows="1"
+            placeholder="Send a message…"
+            data-i18n-placeholder="prompt.placeholder"
+            data-i18n-aria="prompt.label"
+          ></textarea>
+
+          <button
+            id="send-button"
+            class="icon-button send"
+            type="submit"
+            data-i18n-title="send.title"
+            data-i18n-aria="send.title"
+          >
+            <svg class="icon-send" viewBox="0 0 24 24" aria-hidden="true">
+              <path
+                d="M12 19V5m0 0-6 6m6-6 6 6"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="2"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+              />
+            </svg>
+            <svg class="icon-stop" viewBox="0 0 24 24" aria-hidden="true">
+              <rect x="4.5" y="4.5" width="15" height="15" rx="3" fill="currentColor" />
+            </svg>
+          </button>
+        </div>
+      </form>
+      <p id="status" class="status" role="status"></p>
+    </footer>
+
+    <script src="/assets/app.js" type="module"></script>
+  </body>
+</html>
