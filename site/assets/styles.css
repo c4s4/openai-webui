@@ -452,6 +452,11 @@ select:hover {
 .model-name {
   font-size: 13px;
   color: var(--text-muted);
+  /* An alias followed by its identifier makes a long line out of what used to be
+     a short one, and an identifier is one unbreakable word: without this, a
+     narrow screen has it run past the bubble rather than wrap. */
+  min-width: 0;
+  overflow-wrap: anywhere;
 }
 
 /* ---------- Reasoning ---------- */

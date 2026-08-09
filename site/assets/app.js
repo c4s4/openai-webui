@@ -847,9 +847,13 @@ function createAnswerHead(modelId) {
 
   const model = document.createElement("span");
   model.className = "model-name";
-  // The name the menu shows, so the answer and the picker agree; the identifier
-  // that produced it stays a hover away, aliased or not.
-  model.textContent = modelLabel(modelId);
+  // The name the menu shows, so the answer and the picker agree — followed by
+  // the identifier when they differ. Unlike the menu, which is chosen once and
+  // then forgotten, this line is what a thread is re-read with: which model
+  // actually wrote an answer is worth having in the page rather than behind a
+  // hover, all the more so when several models have answered in the same thread.
+  const alias = modelAliases.get(modelId);
+  model.textContent = alias ? `${alias} (${modelId})` : modelId;
   model.title = modelId;
 
   node.append(model, spinner);
