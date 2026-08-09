@@ -27,3 +27,14 @@ if [ -n "${OPENAI_API_KEY:-}" ]; then
 else
     export OPENAI_AUTHORIZATION=""
 fi
+
+# The aliases are rendered inside a single-quoted NGinX string, so a quote in
+# there would close it early and leave a configuration NGinX rejects with a
+# syntax error pointing at the template rather than at the variable.
+case "${OPENAI_MODEL_ALIASES:-}" in
+    *"'"*)
+        echo >&2 "$0: ERROR: OPENAI_MODEL_ALIASES must not contain a quote — see the .env file"
+        exit 1
+        ;;
+esac
+export OPENAI_MODEL_ALIASES="${OPENAI_MODEL_ALIASES:-}"

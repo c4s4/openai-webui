@@ -11,6 +11,8 @@ import { readPdf, isPdf } from "./pdf.js";
 import { LANGUAGES, applyTranslations, formatNumber, getLanguage, setLanguage, t } from "./i18n.js";
 
 const API_BASE = "/api";
+/** Model display names, served by NGinX out of `OPENAI_MODEL_ALIASES`. Outside `/api/`: nothing is proxied. */
+const ALIASES_URL = "/aliases";
 const MAX_FILE_BYTES = 20 * 1024 * 1024;
 /** Shown in the "file too large" message, so the number and the limit cannot drift apart. */
 const MAX_FILE_MB = MAX_FILE_BYTES / 1024 / 1024;
@@ -143,20 +145,80 @@ function setUpLanguagePicker() {
 
 /* ---------------------------------------------------------------- models */
 
+/**
+ * Display names for the model identifiers, `id -> alias`, as configured on the
+ * server. Empty until {@link loadAliases} has answered, and empty for good when
+ * nothing is configured — which is the usual case, and the one where every
+ * identifier is shown as the API gives it.
+ *
+ * Only the label changes: the identifier stays what the select carries and what
+ * the completion request sends, so an alias never has to match anything the
+ * backend knows about.
+ *
+ * @type {Map<string, string>}
+ */
+let modelAliases = new Map();
+
+/**
+ * Fetches the aliases from NGinX, which renders the `OPENAI_MODEL_ALIASES`
+ * variable into a plain-text list of `id=alias` pairs separated by commas.
+ *
+ * A failure here is not worth an error on screen: the page falls back to the
+ * raw identifiers, which is exactly what it showed before aliases existed.
+ */
+async function loadAliases() {
+  try {
+    const response = await fetch(ALIASES_URL);
+    if (!response.ok) return new Map();
+    return parseAliases(await response.text());
+  } catch {
+    return new Map();
+  }
+}
+
+/**
+ * Reads the `id=alias, other-id=other alias` list. An identifier may hold `=`
+ * signs, so the split is on the first one only; spaces around either side are
+ * trimmed, which lets the variable be written with room to breathe. Anything
+ * malformed is dropped rather than fought over: a typo in one pair leaves the
+ * others working.
+ */
+function parseAliases(text) {
+  const aliases = new Map();
+  for (const entry of text.split(",")) {
+    const separator = entry.indexOf("=");
+    if (separator < 0) continue;
+    const id = entry.slice(0, separator).trim();
+    const alias = entry.slice(separator + 1).trim();
+    if (id && alias) aliases.set(id, alias);
+  }
+  return aliases;
+}
+
+/** The name a model is shown under: its alias if it has one, its identifier otherwise. */
+function modelLabel(id) {
+  return modelAliases.get(id) ?? id;
+}
+
 async function loadModels() {
   try {
-    const response = await fetch(`${API_BASE}/models`);
+    // Both are wanted before the list is drawn, and neither depends on the
+    // other, so they travel together.
+    const [response, aliases] = await Promise.all([fetch(`${API_BASE}/models`), loadAliases()]);
     if (!response.ok) throw new Error(await describeError(response));
+    modelAliases = aliases;
 
     const models = (await response.json()).data ?? [];
-    models.sort((a, b) => a.id.localeCompare(b.id));
+    // Sorted on what is shown, not on the identifier: an alphabetical menu that
+    // is not in alphabetical order is worse than no order at all.
+    models.sort((a, b) => modelLabel(a.id).localeCompare(modelLabel(b.id)));
     if (models.length === 0) throw new Error(t("model.none"));
 
     modelSelect.innerHTML = "";
     for (const model of models) {
       const option = document.createElement("option");
       option.value = model.id;
-      option.textContent = model.id;
+      option.textContent = modelLabel(model.id);
       modelSelect.append(option);
     }
 
@@ -182,7 +244,8 @@ async function loadModels() {
 /**
  * Puts the selected identifier in the tooltip of the select. The box has a fixed
  * width, like the three next to it, so a long identifier is shown ellipsised: the
- * tooltip is where the whole of it stays readable.
+ * tooltip is where the whole of it stays readable — and, when the model is shown
+ * under an alias, the one place the identifier actually sent is still visible.
  */
 function showFullModelName() {
   modelSelect.title = modelSelect.value;
@@ -753,7 +816,7 @@ function giveTurnBack(turn) {
  * not: the model name, followed by a spinner that turns from the request to the
  * end of the generation.
  */
-function createAnswerHead(modelName) {
+function createAnswerHead(modelId) {
   const node = document.createElement("div");
   node.className = "answer-head";
 
@@ -764,7 +827,10 @@ function createAnswerHead(modelName) {
 
   const model = document.createElement("span");
   model.className = "model-name";
-  model.textContent = modelName;
+  // The name the menu shows, so the answer and the picker agree; the identifier
+  // that produced it stays a hover away, aliased or not.
+  model.textContent = modelLabel(modelId);
+  model.title = modelId;
 
   node.append(model, spinner);
 

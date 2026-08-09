@@ -9,6 +9,8 @@
 #   OPENAI_AUTHORIZATION  Authorization header, derived from OPENAI_API_KEY by
 #                         docker-entrypoint.d/15-openai-webui.envsh (empty when
 #                         no key is set, which drops the header entirely)
+#   OPENAI_MODEL_ALIASES  display names for the models, as a list of id=alias
+#                         pairs (empty when none is configured)
 #
 # Only names starting with OPENAI_ are substituted (NGINX_ENVSUBST_FILTER), so
 # NGinX's own $variables come through untouched.
@@ -48,6 +50,18 @@ server {
 
     location /assets/ {
         add_header Cache-Control "public, max-age=3600" always;
+    }
+
+    # Model display names, straight out of the environment: the page renames the
+    # entries of its menu with them and keeps sending the identifiers. Served
+    # rather than baked into the site so that a rename needs no image rebuild,
+    # and left uncached so that it follows a restart at once. The entrypoint has
+    # already turned down a value holding a quote, which would end this string
+    # early and break the configuration.
+    location = /aliases {
+        default_type text/plain;
+        add_header Cache-Control "no-store" always;
+        return 200 '${OPENAI_MODEL_ALIASES}';
     }
 
     # Reverse proxy to the API: the key stays server-side and is never exposed

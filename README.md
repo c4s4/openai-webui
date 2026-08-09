@@ -39,6 +39,7 @@ Copy [.env.example](.env.example) to `.env` and fill it in. The file is required
 |---|---|
 | `OPENAI_API_BASE_URL` | Base URL of the OpenAI-compatible API — `https://api.openai.com/v1/`, or `http://192.168.1.102:1234/v1/` for LM Studio or Ollama. A trailing slash is added if missing: it is what maps `/api/models` onto `/v1/models`. Unset, the container stops with an explicit message. |
 | `OPENAI_API_KEY` | The key, without the `Bearer ` prefix. Left empty, no `Authorization` header is sent at all, which is what a local backend that does not authenticate expects. |
+| `OPENAI_MODEL_ALIASES` | Display names for the models, as a comma-separated list of `id=alias` pairs — `Qwen3.6-35b-a3b=Fast, gpt-5=Smart`. Only the menu changes: the identifier is what the completion request carries, so an alias may be anything, and a model left out keeps its identifier. Quotes are refused, they would break the NGinX configuration. |
 | `PORT` | Host port the interface is published on. Defaults to 1111. |
 
 The variables are read on every container start, so a change needs a `docker compose up -d` but no rebuild.
@@ -51,7 +52,7 @@ The variables are read on every container start, so a change needs a `docker com
 
 ![gear](icons/gear.svg) **The gear** opens the four settings below, the only configuration the page has. They sit behind a button because they are chosen once and then left alone.
 
-**Model** lists what the backend offers, and is filled on load. The choice is remembered across reloads, unlike the three settings that follow, which start afresh every time.
+**Model** lists what the backend offers, and is filled on load. The choice is remembered across reloads, unlike the three settings that follow, which start afresh every time. `OPENAI_MODEL_ALIASES` renames the entries, for a menu reading `Fast` and `Smart` rather than a column of identifiers; the identifier stays a hover away, on the menu and on the answer alike.
 
 **Thinking** on `Off` asks the model not to reason: a faster and cheaper answer, when the question can do without. On `Auto` the model decides, and its reasoning is shown in a panel above the answer, folded away once the answer proper begins. A backend that refuses the request is retried without the parameters, and the answer says so.
 
