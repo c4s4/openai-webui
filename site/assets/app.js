@@ -221,6 +221,7 @@ async function loadModels() {
       option.textContent = modelLabel(model.id);
       modelSelect.append(option);
     }
+    warnOrphanAliases(models);
 
     const preferred = localStorage.getItem("openai-webui.model");
     if (preferred && models.some((m) => m.id === preferred)) {
@@ -239,6 +240,25 @@ async function loadModels() {
     modelSelect.append(option);
     setStatus(t("status.modelsFailed", { error: error.message }), true);
   }
+}
+
+/**
+ * Says, in the console, which aliases name a model the backend does not offer.
+ *
+ * Such an alias does nothing at all — the menu is built from the API response,
+ * so it renames an entry that is not there — and a mistyped identifier is
+ * therefore invisible: the model simply keeps showing its own name, exactly as
+ * if no alias had been configured. This is the only place where the mistake can
+ * be named, both lists being in hand; and the console is where it belongs,
+ * since it concerns whoever wrote the `.env` file, not whoever is chatting.
+ */
+function warnOrphanAliases(models) {
+  const offered = new Set(models.map((model) => model.id));
+  const orphans = [...modelAliases.keys()].filter((id) => !offered.has(id));
+  if (orphans.length === 0) return;
+  console.warn(
+    `OPENAI_MODEL_ALIASES: no model named ${orphans.map((id) => `"${id}"`).join(", ")} — alias ignored`,
+  );
 }
 
 /**
