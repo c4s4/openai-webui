@@ -38,3 +38,55 @@ case "${OPENAI_MODEL_ALIASES:-}" in
         ;;
 esac
 export OPENAI_MODEL_ALIASES="${OPENAI_MODEL_ALIASES:-}"
+
+# Form of the id=alias pairs, checked but not enforced: a mistyped alias is not
+# worth refusing to serve the page, and the browser drops what it cannot read
+# anyway. What it buys is a line in `docker compose logs` saying so, since the
+# symptom — a model shown under its identifier — looks exactly like no alias at
+# all. Whether the identifiers name models the backend actually offers cannot be
+# told from here: the API may well not be up yet, and the page says it instead.
+#
+# Sourced, so the shell state belongs to the entrypoint: globbing is put back as
+# it was, and the loop variables are dropped on the way out.
+openai_saved_ifs="$IFS"
+case "$-" in *f*) openai_saved_glob="off" ;; *) openai_saved_glob="on" ;; esac
+set -f
+IFS=,
+openai_seen=""
+for openai_pair in $OPENAI_MODEL_ALIASES; do
+    # Trimmed on both edges only, as the page does — an inner space is part of
+    # the name, and judging it here on other rules than there would mean warning
+    # about something that works, or staying silent about something that does not.
+    openai_id="$(printf %s "${openai_pair%%=*}" | sed 's/^[[:space:]]*//; s/[[:space:]]*$//')"
+    openai_alias="$(printf %s "${openai_pair#*=}" | sed 's/^[[:space:]]*//; s/[[:space:]]*$//')"
+
+    case "$openai_pair" in
+        # A trailing or doubled comma: nothing said, nothing meant.
+        *[![:space:]]*)
+            case "$openai_pair" in
+                *=*)
+                    if [ -z "$openai_id" ] || [ -z "$openai_alias" ]; then
+                        echo >&2 "$0: WARNING: OPENAI_MODEL_ALIASES: '$openai_pair' has an empty side — ignored"
+                    else
+                        case "$openai_seen" in
+                            # The page keeps the last one; saying so beats letting
+                            # one alias quietly win over another.
+                            *"|$openai_id|"*)
+                                echo >&2 "$0: WARNING: OPENAI_MODEL_ALIASES: '$openai_id' is aliased twice — the last one wins"
+                                ;;
+                            *)
+                                openai_seen="$openai_seen|$openai_id|"
+                                ;;
+                        esac
+                    fi
+                    ;;
+                *)
+                    echo >&2 "$0: WARNING: OPENAI_MODEL_ALIASES: '$openai_pair' is not an id=alias pair — ignored"
+                    ;;
+            esac
+            ;;
+    esac
+done
+IFS="$openai_saved_ifs"
+[ "$openai_saved_glob" = "on" ] && set +f
+unset openai_saved_ifs openai_saved_glob openai_pair openai_id openai_alias openai_seen
