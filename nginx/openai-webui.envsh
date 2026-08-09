@@ -28,16 +28,24 @@ else
     export OPENAI_AUTHORIZATION=""
 fi
 
-# The aliases are rendered inside a single-quoted NGinX string, so a quote in
-# there would close it early and leave a configuration NGinX rejects with a
-# syntax error pointing at the template rather than at the variable.
-case "${OPENAI_MODEL_ALIASES:-}" in
-    *"'"*)
-        echo >&2 "$0: ERROR: OPENAI_MODEL_ALIASES must not contain a quote — see the .env file"
-        exit 1
-        ;;
-esac
+# Both are rendered inside a single-quoted NGinX string, so a quote in there
+# would close it early and leave a configuration NGinX rejects with a syntax
+# error pointing at the template rather than at the variable.
+for openai_setting in OPENAI_MODEL_ALIASES OPENAI_MODEL_DEFAULT; do
+    eval "openai_value=\"\${$openai_setting:-}\""
+    case "$openai_value" in
+        *"'"*)
+            echo >&2 "$0: ERROR: $openai_setting must not contain a quote — see the .env file"
+            exit 1
+            ;;
+    esac
+done
+unset openai_setting openai_value
+
 export OPENAI_MODEL_ALIASES="${OPENAI_MODEL_ALIASES:-}"
+# Whether it names a model the backend actually offers cannot be told from here,
+# no more than for the aliases; the page says so in its console.
+export OPENAI_MODEL_DEFAULT="${OPENAI_MODEL_DEFAULT:-}"
 
 # Form of the id=alias pairs, checked but not enforced: a mistyped alias is not
 # worth refusing to serve the page, and the browser drops what it cannot read

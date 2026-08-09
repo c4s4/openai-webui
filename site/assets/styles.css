@@ -172,6 +172,78 @@ select:hover {
   border-color: var(--text-muted);
 }
 
+/* ---------- Aliases ---------- */
+
+/* Last row of the panel, unfolding in place: the panel grows downwards and the
+   settings above it do not move, which is what makes the list readable while a
+   model is being picked. Sunken rather than outlined, like the reasoning panel
+   it borrows the gesture from, so it reads as a note and not as a fifth
+   setting. */
+.aliases {
+  background: var(--bg-sunken);
+  border-radius: 12px;
+  padding: 6px 12px;
+}
+
+.aliases-summary {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  list-style: none;
+  color: var(--text-muted);
+  font-size: 13px;
+  cursor: pointer;
+}
+
+.aliases-summary::-webkit-details-marker {
+  display: none;
+}
+
+/* Chevron drawn here rather than added to the markup: the summary carries a
+   `data-i18n` attribute, which rewrites its whole content on a language change
+   and would take any child element with it. */
+.aliases-summary::before {
+  content: "";
+  flex: none;
+  width: 7px;
+  height: 7px;
+  margin-left: 2px;
+  border: solid currentcolor;
+  border-width: 1.5px 1.5px 0 0;
+  transform: rotate(45deg);
+  transition: transform 0.15s;
+}
+
+.aliases[open] .aliases-summary::before {
+  /* Points down once open, and turns rather than jumps. */
+  transform: rotate(135deg);
+}
+
+.aliases-summary:hover {
+  color: var(--text);
+}
+
+/* Two columns: the alias as the menu shows it, the identifier that goes to the
+   API beside it. An identifier is one long unbreakable word, so it wraps rather
+   than pushing the panel past its own width. */
+.alias-list {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 4px 12px;
+  margin: 8px 0 4px;
+  font-size: 13px;
+}
+
+.alias-list dt {
+  font-weight: 600;
+}
+
+.alias-list dd {
+  margin: 0;
+  color: var(--text-muted);
+  overflow-wrap: anywhere;
+}
+
 /* Two round buttons and the title: the bar holds on any screen, and only the
    title gives ground on a very narrow one. */
 @media (max-width: 420px) {
@@ -452,9 +524,9 @@ select:hover {
 .model-name {
   font-size: 13px;
   color: var(--text-muted);
-  /* An alias followed by its identifier makes a long line out of what used to be
-     a short one, and an identifier is one unbreakable word: without this, a
-     narrow screen has it run past the bubble rather than wrap. */
+  /* An identifier is one unbreakable word, and a local backend serves long ones
+     (`llama3:8b-instruct-q4_K_M`): without this, a narrow screen has the line
+     run past the bubble rather than wrap. */
   min-width: 0;
   overflow-wrap: anywhere;
 }

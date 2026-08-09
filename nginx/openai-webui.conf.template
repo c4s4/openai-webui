@@ -11,6 +11,8 @@
 #                         no key is set, which drops the header entirely)
 #   OPENAI_MODEL_ALIASES  display names for the models, as a list of id=alias
 #                         pairs (empty when none is configured)
+#   OPENAI_MODEL_DEFAULT  the model a fresh visit starts on, by identifier or by
+#                         alias (empty when none is configured)
 #
 # Only names starting with OPENAI_ are substituted (NGINX_ENVSUBST_FILTER), so
 # NGinX's own $variables come through untouched.
@@ -62,6 +64,14 @@ server {
         default_type text/plain;
         add_header Cache-Control "no-store" always;
         return 200 '${OPENAI_MODEL_ALIASES}';
+    }
+
+    # The model a fresh visit starts on, an identifier or one of the aliases
+    # above. Served the same way, and for the same reasons.
+    location = /default-model {
+        default_type text/plain;
+        add_header Cache-Control "no-store" always;
+        return 200 '${OPENAI_MODEL_DEFAULT}';
     }
 
     # Reverse proxy to the API: the key stays server-side and is never exposed

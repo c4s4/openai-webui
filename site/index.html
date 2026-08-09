@@ -103,6 +103,21 @@
             <span class="picker-label" data-i18n="lang.label">Language</span>
             <select id="lang-select" data-i18n-aria="lang.label"></select>
           </label>
+          <!-- What the aliases of the model menu stand for, unfolding under the
+               settings the way the reasoning panel unfolds under its heading.
+               Below them because it is a reminder rather than a setting, and
+               shown only when aliases are configured: with none, it would open
+               on an empty list. Filled from the models the API returned. -->
+          <details id="alias-details" class="aliases" hidden>
+            <summary
+              class="aliases-summary"
+              data-i18n="alias.label"
+              data-i18n-title="alias.title"
+            >
+              Aliases
+            </summary>
+            <dl id="alias-list" class="alias-list"></dl>
+          </details>
         </div>
       </div>
 

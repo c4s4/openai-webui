@@ -13,6 +13,8 @@ import { LANGUAGES, applyTranslations, formatNumber, getLanguage, setLanguage, t
 const API_BASE = "/api";
 /** Model display names, served by NGinX out of `OPENAI_MODEL_ALIASES`. Outside `/api/`: nothing is proxied. */
 const ALIASES_URL = "/aliases";
+/** The model to start on, likewise served out of `OPENAI_MODEL_DEFAULT`. */
+const DEFAULT_MODEL_URL = "/default-model";
 const MAX_FILE_BYTES = 20 * 1024 * 1024;
 /** Shown in the "file too large" message, so the number and the limit cannot drift apart. */
 const MAX_FILE_MB = MAX_FILE_BYTES / 1024 / 1024;
@@ -57,6 +59,8 @@ const newChatButton = document.getElementById("new-chat");
 const langSelect = document.getElementById("lang-select");
 const optionsButton = document.getElementById("options-button");
 const optionsMenu = document.getElementById("options-menu");
+const aliasDetails = document.getElementById("alias-details");
+const aliasList = document.getElementById("alias-list");
 
 /** @type {Array<{role: string, content: unknown}>} */
 let history = [];
@@ -160,19 +164,20 @@ function setUpLanguagePicker() {
 let modelAliases = new Map();
 
 /**
- * Fetches the aliases from NGinX, which renders the `OPENAI_MODEL_ALIASES`
- * variable into a plain-text list of `id=alias` pairs separated by commas.
+ * Reads one of the plain-text settings NGinX renders out of the environment.
  *
- * A failure here is not worth an error on screen: the page falls back to the
- * raw identifiers, which is exactly what it showed before aliases existed.
+ * A failure here is not worth an error on screen: an empty answer means the
+ * setting is not configured, and the page behaves as it did before the setting
+ * existed — raw identifiers in the menu, and its own idea of which model to
+ * start on.
  */
-async function loadAliases() {
+async function fetchSetting(url) {
   try {
-    const response = await fetch(ALIASES_URL);
-    if (!response.ok) return new Map();
-    return parseAliases(await response.text());
+    const response = await fetch(url);
+    if (!response.ok) return "";
+    return (await response.text()).trim();
   } catch {
-    return new Map();
+    return "";
   }
 }
 
@@ -202,11 +207,15 @@ function modelLabel(id) {
 
 async function loadModels() {
   try {
-    // Both are wanted before the list is drawn, and neither depends on the
-    // other, so they travel together.
-    const [response, aliases] = await Promise.all([fetch(`${API_BASE}/models`), loadAliases()]);
+    // All three are wanted before the list is drawn, and none depends on the
+    // others, so they travel together.
+    const [response, aliasSetting, wantedDefault] = await Promise.all([
+      fetch(`${API_BASE}/models`),
+      fetchSetting(ALIASES_URL),
+      fetchSetting(DEFAULT_MODEL_URL),
+    ]);
     if (!response.ok) throw new Error(await describeError(response));
-    modelAliases = aliases;
+    modelAliases = parseAliases(aliasSetting);
 
     const models = (await response.json()).data ?? [];
     // Sorted on what is shown, not on the identifier: an alphabetical menu that
@@ -222,13 +231,17 @@ async function loadModels() {
       modelSelect.append(option);
     }
     warnOrphanAliases(models);
+    fillAliasList(models);
 
+    // What was picked last comes first: a choice made in the interface outranks
+    // the one configured on the server, which is where a first visit starts —
+    // and where a visitor whose remembered model has since left the backend
+    // lands again.
     const preferred = localStorage.getItem("openai-webui.model");
     if (preferred && models.some((m) => m.id === preferred)) {
       modelSelect.value = preferred;
     } else {
-      const chat = models.find((m) => /^(gpt|o\d)/.test(m.id));
-      modelSelect.value = (chat ?? models[0]).id;
+      modelSelect.value = defaultModel(models, wantedDefault);
     }
     showFullModelName();
   } catch (error) {
@@ -240,6 +253,50 @@ async function loadModels() {
     modelSelect.append(option);
     setStatus(t("status.modelsFailed", { error: error.message }), true);
   }
+}
+
+/**
+ * Fills the fold at the bottom of the options panel with what each alias stands
+ * for, in the order of the menu above it, and hides the whole thing when nothing
+ * is aliased — an empty fold invites a click that shows nothing.
+ *
+ * Only the models the backend actually offers are listed, menu and fold saying
+ * the same thing: an alias naming a model that is not there renames nothing, and
+ * belongs in the console warning rather than here.
+ */
+function fillAliasList(models) {
+  aliasList.innerHTML = "";
+  for (const model of models) {
+    const alias = modelAliases.get(model.id);
+    if (!alias) continue;
+
+    const term = document.createElement("dt");
+    term.textContent = alias;
+    const definition = document.createElement("dd");
+    definition.textContent = model.id;
+    aliasList.append(term, definition);
+  }
+  aliasDetails.hidden = aliasList.childElementCount === 0;
+}
+
+/**
+ * The model a fresh visit starts on: what `OPENAI_MODEL_DEFAULT` names, given
+ * either as an identifier or as one of the aliases, since the menu shows the
+ * aliases and configuring by what is on screen is the obvious thing to try.
+ *
+ * Nothing configured, or nothing matching — a renamed model, a backend serving
+ * something else than it used to — falls back to the first identifier that
+ * looks like a chat model, then to the first of the list: an empty menu is
+ * never an option, and neither is a page that refuses to start over a setting.
+ */
+function defaultModel(models, wanted) {
+  if (wanted) {
+    const named = models.find((model) => model.id === wanted || modelAliases.get(model.id) === wanted);
+    if (named) return named.id;
+    console.warn(`OPENAI_MODEL_DEFAULT: no model or alias named "${wanted}" — starting on another one`);
+  }
+  const chat = models.find((model) => /^(gpt|o\d)/.test(model.id));
+  return (chat ?? models[0]).id;
 }
 
 /**
@@ -847,14 +904,12 @@ function createAnswerHead(modelId) {
 
   const model = document.createElement("span");
   model.className = "model-name";
-  // The name the menu shows, so the answer and the picker agree — followed by
-  // the identifier when they differ. Unlike the menu, which is chosen once and
-  // then forgotten, this line is what a thread is re-read with: which model
-  // actually wrote an answer is worth having in the page rather than behind a
-  // hover, all the more so when several models have answered in the same thread.
-  const alias = modelAliases.get(modelId);
-  model.textContent = alias ? `${alias} (${modelId})` : modelId;
-  model.title = modelId;
+  // The identifier, never the alias: unlike the menu, which is chosen once and
+  // then forgotten, this line is what a thread is re-read with, and what wrote
+  // an answer is then worth naming exactly — all the more so when several models
+  // have answered in the same thread. The alias is one unfold away, at the
+  // bottom of the options panel.
+  model.textContent = modelId;
 
   node.append(model, spinner);
 
