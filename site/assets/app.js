@@ -8,6 +8,7 @@
 
 import { renderMarkdown } from "./markdown.js";
 import { readPdf, isPdf } from "./pdf.js";
+import { recall, remember } from "./storage.js";
 import { LANGUAGES, applyTranslations, formatNumber, getLanguage, setLanguage, t } from "./i18n.js";
 
 const API_BASE = "/api";
@@ -15,6 +16,8 @@ const API_BASE = "/api";
 const ALIASES_URL = "/aliases";
 /** The model to start on, likewise served out of `OPENAI_MODEL_DEFAULT`. */
 const DEFAULT_MODEL_URL = "/default-model";
+/** Where the picked model is remembered, next to the language key of i18n.js. */
+const MODEL_STORAGE_KEY = "openai-webui.model";
 const MAX_FILE_BYTES = 20 * 1024 * 1024;
 /** Shown in the "file too large" message, so the number and the limit cannot drift apart. */
 const MAX_FILE_MB = MAX_FILE_BYTES / 1024 / 1024;
@@ -151,9 +154,9 @@ function setUpLanguagePicker() {
 
 /**
  * Display names for the model identifiers, `id -> alias`, as configured on the
- * server. Empty until {@link loadAliases} has answered, and empty for good when
- * nothing is configured — which is the usual case, and the one where every
- * identifier is shown as the API gives it.
+ * server. Empty until {@link loadModels} has read the setting, and empty for
+ * good when nothing is configured — which is the usual case, and the one where
+ * every identifier is shown as the API gives it.
  *
  * Only the label changes: the identifier stays what the select carries and what
  * the completion request sends, so an alias never has to match anything the
@@ -170,11 +173,17 @@ let modelAliases = new Map();
  * setting is not configured, and the page behaves as it did before the setting
  * existed — raw identifiers in the menu, and its own idea of which model to
  * start on.
+ *
+ * The content type is checked, and not out of pedantry: served by anything but
+ * this NGinX — a static server, or the page opened straight from the disk — an
+ * unknown path answers with the index page rather than a 404, and that HTML,
+ * read as a list of settings, yields aliases made of tag fragments.
  */
 async function fetchSetting(url) {
   try {
     const response = await fetch(url);
     if (!response.ok) return "";
+    if (!(response.headers.get("content-type") ?? "").startsWith("text/plain")) return "";
     return (await response.text()).trim();
   } catch {
     return "";
@@ -237,7 +246,7 @@ async function loadModels() {
     // the one configured on the server, which is where a first visit starts —
     // and where a visitor whose remembered model has since left the backend
     // lands again.
-    const preferred = localStorage.getItem("openai-webui.model");
+    const preferred = recall(MODEL_STORAGE_KEY);
     if (preferred && models.some((m) => m.id === preferred)) {
       modelSelect.value = preferred;
     } else {
@@ -329,7 +338,7 @@ function showFullModelName() {
 }
 
 modelSelect.addEventListener("change", () => {
-  localStorage.setItem("openai-webui.model", modelSelect.value);
+  remember(MODEL_STORAGE_KEY, modelSelect.value);
   showFullModelName();
 });
 
@@ -947,15 +956,19 @@ function createReasoningBlock() {
   details.hidden = true;
   details.open = true;
 
+  // Named here rather than on the handle inside it: the summary is what carries
+  // the fold, and what the keyboard reaches. A `role="button"` on the handle
+  // would put a second control in the accessibility tree — one no `Tab` can ever
+  // land on, since the pointer-events rules that make only the chevron clickable
+  // leave it unfocusable.
   const summary = document.createElement("summary");
+  summary.dataset.i18nAria = "reasoning.toggle";
+  summary.setAttribute("aria-label", t("reasoning.toggle"));
 
-  // Only the handle toggles the panel: the rest of the line is inert (see the
-  // pointer-events rules in the stylesheet).
+  // Only the handle toggles the panel on a click: the rest of the line is inert
+  // (see the pointer-events rules in the stylesheet).
   const handle = document.createElement("span");
   handle.className = "reasoning-handle";
-  handle.setAttribute("role", "button");
-  handle.dataset.i18nAria = "reasoning.toggle";
-  handle.setAttribute("aria-label", t("reasoning.toggle"));
   handle.innerHTML = CHEVRON_ICON;
 
   const sparkles = document.createElement("span");
@@ -1029,24 +1042,44 @@ function splitThinking(raw) {
   return { thinking, answer: answer.trimStart() };
 }
 
+/**
+ * End of an SSE event: a blank line, in any of the three terminators the format
+ * allows. Looking for `\n\n` alone would be enough for OpenAI, which sends bare
+ * newlines, but a gateway that writes CRLF would then never close a single event
+ * and the whole stream would sit in the buffer until the answer came out empty.
+ *
+ * Matched rather than normalised on arrival, so a terminator split across two
+ * chunks — `\r\n\r` here, `\n` in the next — is waited for instead of being read
+ * as two blank lines.
+ */
+const SSE_BOUNDARY = /\r\n\r\n|\r\r|\n\n/;
+
 /** Yields the payload of each `data:` line of an SSE stream. */
 async function* readSse(body) {
   const reader = body.pipeThrough(new TextDecoderStream()).getReader();
   let buffer = "";
 
-  while (true) {
-    const { value, done } = await reader.read();
-    if (done) break;
-    buffer += value;
+  try {
+    while (true) {
+      const { value, done } = await reader.read();
+      if (done) break;
+      buffer += value;
 
-    let boundary;
-    while ((boundary = buffer.indexOf("\n\n")) !== -1) {
-      const event = buffer.slice(0, boundary);
-      buffer = buffer.slice(boundary + 2);
-      for (const line of event.split("\n")) {
-        if (line.startsWith("data:")) yield line.slice(5).trim();
+      let boundary;
+      while ((boundary = SSE_BOUNDARY.exec(buffer))) {
+        const event = buffer.slice(0, boundary.index);
+        buffer = buffer.slice(boundary.index + boundary[0].length);
+        for (const line of event.split(/\r\n|[\r\n]/)) {
+          if (line.startsWith("data:")) yield line.slice(5).trim();
+        }
       }
     }
+  } finally {
+    // `[DONE]` and a stop both leave the loop before the stream ends: cancelling
+    // hands the connection back instead of leaving it to the garbage collector.
+    // It rejects on a body already aborted, which is precisely the case where
+    // there is nothing left to release.
+    await reader.cancel().catch(() => {});
   }
 }
 

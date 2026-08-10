@@ -20,6 +20,8 @@
  *   spoken to.
  */
 
+import { recall, remember } from "./storage.js";
+
 /**
  * Offered languages, named in their own language rather than translated, each
  * with a flag to scan the list by.
@@ -983,7 +985,7 @@ let language = pickInitialLanguage();
  * as `fr-CA`, so only the primary subtag is compared.
  */
 function pickInitialLanguage() {
-  const stored = localStorage.getItem(STORAGE_KEY);
+  const stored = recall(STORAGE_KEY);
   if (stored && MESSAGES[stored]) return stored;
 
   for (const tag of navigator.languages ?? [navigator.language ?? ""]) {
@@ -1001,7 +1003,7 @@ export function getLanguage() {
 export function setLanguage(code) {
   if (!MESSAGES[code]) return;
   language = code;
-  localStorage.setItem(STORAGE_KEY, code);
+  remember(STORAGE_KEY, code);
   document.documentElement.lang = code;
   applyTranslations();
 }

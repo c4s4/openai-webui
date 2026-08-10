@@ -1,8 +1,8 @@
 # OpenAI WebUI — NGinX site configuration.
 #
 # A template, not a ready-to-use configuration: the NGinX image renders it into
-# /etc/nginx/conf.d/default.conf on every start, substituting the two variables
-# below. They are set in the Compose file, so the image needs no rebuild and the
+# /etc/nginx/conf.d/default.conf on every start, substituting the four variables
+# below. They come from the environment, so the image needs no rebuild and the
 # API key never has to be committed:
 #
 #   OPENAI_API_BASE_URL   base URL of the OpenAI-compatible API
