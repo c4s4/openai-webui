@@ -39,10 +39,10 @@ else
     export OPENAI_AUTHORIZATION=""
 fi
 
-# Both are rendered inside a single-quoted NGinX string, so a quote in there
+# All three are rendered inside a single-quoted NGinX string, so a quote in there
 # would close it early and leave a configuration NGinX rejects with a syntax
 # error pointing at the template rather than at the variable.
-for openai_setting in OPENAI_MODEL_ALIASES OPENAI_MODEL_DEFAULT; do
+for openai_setting in OPENAI_MODEL_ALIASES OPENAI_MODEL_DEFAULT OPENAI_MODEL_IGNORE; do
     eval "openai_value=\"\${$openai_setting:-}\""
     case "$openai_value" in
         *"'"*)
@@ -57,6 +57,10 @@ export OPENAI_MODEL_ALIASES="${OPENAI_MODEL_ALIASES:-}"
 # Whether it names a model the backend actually offers cannot be told from here,
 # no more than for the aliases; the page says so in its console.
 export OPENAI_MODEL_DEFAULT="${OPENAI_MODEL_DEFAULT:-}"
+# Nor whether a pattern matches anything, for the same reason — and there is no
+# form to check either: any non-empty word is a pattern, and an empty one between
+# two commas means nothing and is dropped by the page.
+export OPENAI_MODEL_IGNORE="${OPENAI_MODEL_IGNORE:-}"
 
 # Form of the id=alias pairs, checked but not enforced: a mistyped alias is not
 # worth refusing to serve the page, and the browser drops what it cannot read

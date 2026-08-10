@@ -510,9 +510,17 @@ select:hover {
   color: var(--text-muted);
   /* An identifier is one unbreakable word, and a local backend serves long ones
      (`llama3:8b-instruct-q4_K_M`): without this, a narrow screen has the line
-     run past the bubble rather than wrap. */
+     run past the bubble rather than wrap. Aliased away, the name is short — but
+     the identifier is still what is written when no alias renames it. */
   min-width: 0;
   overflow-wrap: anywhere;
+}
+
+/* Only aliased answers carry one, holding the identifier that was actually sent:
+   the cursor is what says there is something to read there, as it does on the
+   metrics line below. */
+.model-name[title] {
+  cursor: help;
 }
 
 /* ---------- Reasoning ---------- */

@@ -16,6 +16,8 @@ const API_BASE = "/api";
 const ALIASES_URL = "/aliases";
 /** The model to start on, likewise served out of `OPENAI_MODEL_DEFAULT`. */
 const DEFAULT_MODEL_URL = "/default-model";
+/** What to leave out of the menu, likewise served out of `OPENAI_MODEL_IGNORE`. */
+const IGNORED_MODELS_URL = "/ignored-models";
 /** Where the picked model is remembered, next to the language key of i18n.js. */
 const MODEL_STORAGE_KEY = "openai-webui.model";
 const MAX_FILE_BYTES = 20 * 1024 * 1024;
@@ -214,23 +216,82 @@ function modelLabel(id) {
   return modelAliases.get(id) ?? id;
 }
 
+/**
+ * Reads the `whisper-1, tts-*, *-embedding-*` list into one matcher per entry.
+ *
+ * A `*` stands for any run of characters, and is what makes the setting usable
+ * at all against an API whose catalogue is mostly not chat models: OpenAI alone
+ * answers with some eighty entries, of which four families — audio, images,
+ * embeddings, moderation — have nothing to do in the menu, and naming them one
+ * by one would mean a list to revisit at every release.
+ *
+ * Everything else is taken literally, `.` first among them: an identifier is
+ * full of dots and dashes, and `gpt-4.1` has no business matching `gpt-4x1`.
+ * Case is ignored, since nothing here is ever sent to the backend — a pattern
+ * that fails on capitalisation alone would silently leave the menu as it was.
+ */
+function parseIgnoreList(text) {
+  const patterns = [];
+  for (const entry of text.split(",")) {
+    const pattern = entry.trim();
+    if (!pattern) continue;
+    const escaped = pattern.replace(/[.*+?^${}()|[\]\\]/g, "\\$&").replaceAll("\\*", ".*");
+    patterns.push({ pattern, regexp: new RegExp(`^${escaped}$`, "i") });
+  }
+  return patterns;
+}
+
+/**
+ * The models the menu is built from: what the API offered, less what
+ * `OPENAI_MODEL_IGNORE` matches.
+ *
+ * Filtering here rather than anywhere else is what makes the rest of the page
+ * follow without knowing about the setting: the fold of aliases, the default of
+ * a first visit and the remembered choice are all decided on this list, so a
+ * model that has just been ignored is simply a model the backend no longer
+ * offers as far as they are concerned.
+ *
+ * An entry matching nothing is said in the console, for the same reason an
+ * orphan alias is: the symptom of a mistyped pattern is a menu that looks
+ * exactly as it did before, so nothing else would ever point at it.
+ */
+function keptModels(models, ignore) {
+  if (ignore.length === 0) return models;
+
+  const idle = ignore.filter((entry) => !models.some((model) => entry.regexp.test(model.id)));
+  if (idle.length > 0) {
+    const named = idle.map((entry) => `"${entry.pattern}"`).join(", ");
+    console.warn(`OPENAI_MODEL_IGNORE: nothing matches ${named} — entry has no effect`);
+  }
+
+  return models.filter((model) => !ignore.some((entry) => entry.regexp.test(model.id)));
+}
+
 async function loadModels() {
   try {
-    // All three are wanted before the list is drawn, and none depends on the
+    // All four are wanted before the list is drawn, and none depends on the
     // others, so they travel together.
-    const [response, aliasSetting, wantedDefault] = await Promise.all([
+    const [response, aliasSetting, wantedDefault, ignoreSetting] = await Promise.all([
       fetch(`${API_BASE}/models`),
       fetchSetting(ALIASES_URL),
       fetchSetting(DEFAULT_MODEL_URL),
+      fetchSetting(IGNORED_MODELS_URL),
     ]);
     if (!response.ok) throw new Error(await describeError(response));
     modelAliases = parseAliases(aliasSetting);
 
-    const models = (await response.json()).data ?? [];
+    const offered = (await response.json()).data ?? [];
+    if (offered.length === 0) throw new Error(t("model.none"));
+
+    // Told apart from an empty answer above, since the two call for opposite
+    // things: a backend serving nothing needs looking at, a menu emptied by the
+    // ignore list needs the list shortened.
+    const models = keptModels(offered, parseIgnoreList(ignoreSetting));
+    if (models.length === 0) throw new Error(t("model.allIgnored"));
+
     // Sorted on what is shown, not on the identifier: an alphabetical menu that
     // is not in alphabetical order is worse than no order at all.
     models.sort((a, b) => modelLabel(a.id).localeCompare(modelLabel(b.id)));
-    if (models.length === 0) throw new Error(t("model.none"));
 
     modelSelect.innerHTML = "";
     for (const model of models) {
@@ -294,37 +355,40 @@ function fillAliasList(models) {
  * aliases and configuring by what is on screen is the obvious thing to try.
  *
  * Nothing configured, or nothing matching — a renamed model, a backend serving
- * something else than it used to — falls back to the first identifier that
- * looks like a chat model, then to the first of the list: an empty menu is
- * never an option, and neither is a page that refuses to start over a setting.
+ * something else than it used to, a model the ignore list has just taken out —
+ * falls back to the first identifier that looks like a chat model, then to the
+ * first of the list: an empty menu is never an option, and neither is a page
+ * that refuses to start over a setting.
  */
 function defaultModel(models, wanted) {
   if (wanted) {
     const named = models.find((model) => model.id === wanted || modelAliases.get(model.id) === wanted);
     if (named) return named.id;
-    console.warn(`OPENAI_MODEL_DEFAULT: no model or alias named "${wanted}" — starting on another one`);
+    console.warn(
+      `OPENAI_MODEL_DEFAULT: the menu holds no model or alias named "${wanted}" — starting on another one`,
+    );
   }
   const chat = models.find((model) => /^(gpt|o\d)/.test(model.id));
   return (chat ?? models[0]).id;
 }
 
 /**
- * Says, in the console, which aliases name a model the backend does not offer.
+ * Says, in the console, which aliases name a model the menu does not hold.
  *
- * Such an alias does nothing at all — the menu is built from the API response,
- * so it renames an entry that is not there — and a mistyped identifier is
- * therefore invisible: the model simply keeps showing its own name, exactly as
- * if no alias had been configured. This is the only place where the mistake can
- * be named, both lists being in hand; and the console is where it belongs,
- * since it concerns whoever wrote the `.env` file, not whoever is chatting.
+ * Such an alias does nothing at all — it renames an entry that is not there,
+ * whether because the backend does not offer it or because the ignore list took
+ * it out — and a mistyped identifier is therefore invisible: the model simply
+ * keeps showing its own name, exactly as if no alias had been configured. This is
+ * the only place where the mistake can be named, both lists being in hand; and
+ * the console is where it belongs, since it concerns whoever wrote the `.env`
+ * file, not whoever is chatting.
  */
 function warnOrphanAliases(models) {
-  const offered = new Set(models.map((model) => model.id));
-  const orphans = [...modelAliases.keys()].filter((id) => !offered.has(id));
+  const shown = new Set(models.map((model) => model.id));
+  const orphans = [...modelAliases.keys()].filter((id) => !shown.has(id));
   if (orphans.length === 0) return;
-  console.warn(
-    `OPENAI_MODEL_ALIASES: no model named ${orphans.map((id) => `"${id}"`).join(", ")} — alias ignored`,
-  );
+  const named = orphans.map((id) => `"${id}"`).join(", ");
+  console.warn(`OPENAI_MODEL_ALIASES: the menu holds no model named ${named} — alias ignored`);
 }
 
 /**
@@ -913,12 +977,17 @@ function createAnswerHead(modelId) {
 
   const model = document.createElement("span");
   model.className = "model-name";
-  // The identifier, never the alias: unlike the menu, which is chosen once and
-  // then forgotten, this line is what a thread is re-read with, and what wrote
-  // an answer is then worth naming exactly — all the more so when several models
-  // have answered in the same thread. The alias is one unfold away, at the
-  // bottom of the options panel.
-  model.textContent = modelId;
+  // The alias, as in the menu: a thread is re-read under the names it was held
+  // with, and a line reading "Fast" where the menu said "Fast" is what makes two
+  // answers from two models tell themselves apart at a glance.
+  //
+  // Which is worth naming exactly all the same, since this line is the only
+  // place an answer says what wrote it: the identifier goes to the tooltip —
+  // and only when it differs from what is written, a tooltip repeating the text
+  // under the cursor being noise.
+  const label = modelLabel(modelId);
+  model.textContent = label;
+  if (label !== modelId) model.title = modelId;
 
   node.append(model, spinner);
 

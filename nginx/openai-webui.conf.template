@@ -1,7 +1,7 @@
 # OpenAI WebUI — NGinX site configuration.
 #
 # A template, not a ready-to-use configuration: the NGinX image renders it into
-# /etc/nginx/conf.d/default.conf on every start, substituting the four variables
+# /etc/nginx/conf.d/default.conf on every start, substituting the five variables
 # below. They come from the environment, so the image needs no rebuild and the
 # API key never has to be committed:
 #
@@ -13,6 +13,8 @@
 #                         pairs (empty when none is configured)
 #   OPENAI_MODEL_DEFAULT  the model a fresh visit starts on, by identifier or by
 #                         alias (empty when none is configured)
+#   OPENAI_MODEL_IGNORE   identifiers to leave out of the menu, `*` allowed
+#                         (empty when none is configured)
 #
 # Only names starting with OPENAI_ are substituted (NGINX_ENVSUBST_FILTER), so
 # NGinX's own $variables come through untouched.
@@ -72,6 +74,15 @@ server {
         default_type text/plain;
         add_header Cache-Control "no-store" always;
         return 200 '${OPENAI_MODEL_DEFAULT}';
+    }
+
+    # What the menu leaves out of the API's catalogue, as identifiers and `*`
+    # patterns. Served rather than filtered here because only the page has both
+    # lists in hand — the API answers it, not this configuration.
+    location = /ignored-models {
+        default_type text/plain;
+        add_header Cache-Control "no-store" always;
+        return 200 '${OPENAI_MODEL_IGNORE}';
     }
 
     # Reverse proxy to the API: the key stays server-side and is never exposed
