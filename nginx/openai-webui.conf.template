@@ -5,13 +5,13 @@
 # below. They come from the environment, so the image needs no rebuild and the
 # API key never has to be committed:
 #
-#   OPENAI_API_BASE_URL   base URL of the OpenAI-compatible API
+#   OPENAI_BASE_URL       base URL of the OpenAI-compatible API
 #   OPENAI_AUTHORIZATION  Authorization header, derived from OPENAI_API_KEY by
 #                         docker-entrypoint.d/15-openai-webui.envsh (empty when
 #                         no key is set, which drops the header entirely)
 #   OPENAI_MODEL_ALIASES  display names for the models, as a list of id=alias
 #                         pairs (empty when none is configured)
-#   OPENAI_MODEL_DEFAULT  the model a fresh visit starts on, by identifier or by
+#   OPENAI_MODEL          the model a fresh visit starts on, by identifier or by
 #                         alias (empty when none is configured)
 #   OPENAI_MODEL_IGNORE   identifiers to leave out of the menu, `*` allowed
 #                         (empty when none is configured)
@@ -73,7 +73,7 @@ server {
     location = /default-model {
         default_type text/plain;
         add_header Cache-Control "no-store" always;
-        return 200 '${OPENAI_MODEL_DEFAULT}';
+        return 200 '${OPENAI_MODEL}';
     }
 
     # What the menu leaves out of the API's catalogue, as identifiers and `*`
@@ -94,7 +94,7 @@ server {
 
         # The trailing slash of the base URL is what maps /api/… onto the base
         # path (/api/models -> /v1/models); the entrypoint adds it if missing.
-        proxy_pass ${OPENAI_API_BASE_URL};
+        proxy_pass ${OPENAI_BASE_URL};
         proxy_set_header Authorization "${OPENAI_AUTHORIZATION}";
 
         proxy_http_version 1.1;

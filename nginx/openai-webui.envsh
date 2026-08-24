@@ -7,18 +7,18 @@
 
 # A missing base URL would render as an empty proxy_pass and NGinX would refuse
 # to start on a syntax error; say what is actually wrong instead.
-if [ -z "${OPENAI_API_BASE_URL:-}" ]; then
-    echo >&2 "$0: ERROR: OPENAI_API_BASE_URL is not set — see the .env file"
+if [ -z "${OPENAI_BASE_URL:-}" ]; then
+    echo >&2 "$0: ERROR: OPENAI_BASE_URL is not set — see the .env file"
     exit 1
 fi
 
 # The trailing slash is what maps /api/… onto the base path of the API; adding
 # it here spares the classic misconfiguration (/api/models proxied as-is).
-case "$OPENAI_API_BASE_URL" in
+case "$OPENAI_BASE_URL" in
     */) ;;
-    *) OPENAI_API_BASE_URL="$OPENAI_API_BASE_URL/" ;;
+    *) OPENAI_BASE_URL="$OPENAI_BASE_URL/" ;;
 esac
-export OPENAI_API_BASE_URL
+export OPENAI_BASE_URL
 
 # The key is rendered inside a double-quoted NGinX string, the one the
 # Authorization header is built from, so a double quote in there would close it
@@ -42,7 +42,7 @@ fi
 # All three are rendered inside a single-quoted NGinX string, so a quote in there
 # would close it early and leave a configuration NGinX rejects with a syntax
 # error pointing at the template rather than at the variable.
-for openai_setting in OPENAI_MODEL_ALIASES OPENAI_MODEL_DEFAULT OPENAI_MODEL_IGNORE; do
+for openai_setting in OPENAI_MODEL_ALIASES OPENAI_MODEL OPENAI_MODEL_IGNORE; do
     eval "openai_value=\"\${$openai_setting:-}\""
     case "$openai_value" in
         *"'"*)
@@ -56,7 +56,7 @@ unset openai_setting openai_value
 export OPENAI_MODEL_ALIASES="${OPENAI_MODEL_ALIASES:-}"
 # Whether it names a model the backend actually offers cannot be told from here,
 # no more than for the aliases; the page says so in its console.
-export OPENAI_MODEL_DEFAULT="${OPENAI_MODEL_DEFAULT:-}"
+export OPENAI_MODEL="${OPENAI_MODEL:-}"
 # Nor whether a pattern matches anything, for the same reason — and there is no
 # form to check either: any non-empty word is a pattern, and an empty one between
 # two commas means nothing and is dropped by the page.

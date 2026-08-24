@@ -14,7 +14,7 @@ import { LANGUAGES, applyTranslations, formatNumber, getLanguage, setLanguage, t
 const API_BASE = "/api";
 /** Model display names, served by NGinX out of `OPENAI_MODEL_ALIASES`. Outside `/api/`: nothing is proxied. */
 const ALIASES_URL = "/aliases";
-/** The model to start on, likewise served out of `OPENAI_MODEL_DEFAULT`. */
+/** The model to start on, likewise served out of `OPENAI_MODEL`. */
 const DEFAULT_MODEL_URL = "/default-model";
 /** What to leave out of the menu, likewise served out of `OPENAI_MODEL_IGNORE`. */
 const IGNORED_MODELS_URL = "/ignored-models";
@@ -350,7 +350,7 @@ function fillAliasList(models) {
 }
 
 /**
- * The model a fresh visit starts on: what `OPENAI_MODEL_DEFAULT` names, given
+ * The model a fresh visit starts on: what `OPENAI_MODEL` names, given
  * either as an identifier or as one of the aliases, since the menu shows the
  * aliases and configuring by what is on screen is the obvious thing to try.
  *
@@ -365,7 +365,7 @@ function defaultModel(models, wanted) {
     const named = models.find((model) => model.id === wanted || modelAliases.get(model.id) === wanted);
     if (named) return named.id;
     console.warn(
-      `OPENAI_MODEL_DEFAULT: the menu holds no model or alias named "${wanted}" — starting on another one`,
+      `OPENAI_MODEL: the menu holds no model or alias named "${wanted}" — starting on another one`,
     );
   }
   const chat = models.find((model) => /^(gpt|o\d)/.test(model.id));
