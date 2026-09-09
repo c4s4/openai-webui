@@ -12,11 +12,16 @@
  * figures and the handwriting but cost far more tokens and need a vision model.
  */
 
+// Installed before pdf.js evaluates: Safari lacks the Web APIs pdf.js 6 calls,
+// and a missing one throws on the first PDF read.
+import "./polyfills.js";
 import * as pdfjs from "./vendor/pdf.esm.min.js";
 import { t } from "./i18n.js";
 
-// The worker is a module worker; pdf.js spawns it from this URL.
-pdfjs.GlobalWorkerOptions.workerSrc = new URL("./vendor/pdf.worker.min.js", import.meta.url).href;
+// The worker is a module worker; pdf.js spawns it from this URL. It goes
+// through pdf-worker.js rather than the raw file so the same polyfills are in
+// place inside the worker thread, where font decompression iterates streams too.
+pdfjs.GlobalWorkerOptions.workerSrc = new URL("./pdf-worker.js", import.meta.url).href;
 
 /** Longest edge, in pixels, of a rendered page: enough to read 8pt body text. */
 const MAX_EDGE = 1600;
