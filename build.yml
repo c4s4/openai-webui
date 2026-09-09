@@ -4,6 +4,7 @@ default: [start]
 
 properties:
   DOCKER_NAME: 'casa/openai-webui'
+  BUILDER:     'multi-platform-builder'
   USER_HOST:   'casa@gollum'
   DIRECTORY:   '/home/casa/openai-webui/'
 
@@ -33,6 +34,23 @@ targets:
         --tag '={DOCKER_NAME}:latest'
         .
 
+  init:
+    doc: "Create the multi-platform buildx builder"
+    steps:
+    # Idempotent: create only when missing, then make sure it is up.
+    # On a bare Linux host (no Docker Desktop) register QEMU first:
+    # docker run --privileged --rm tonistiigi/binfmt --install amd64 arm64
+    - try:
+      - $: >
+          docker buildx create
+          --name ={BUILDER}
+          --driver docker-container
+          --platform linux/amd64,linux/arm64
+          --use
+      - $: >
+          docker buildx inspect
+          --bootstrap ={BUILDER}
+
   dirty:
     doc: "Check that repository is not dirty"
     steps:
@@ -61,11 +79,11 @@ targets:
 
   push:
     doc: "Build and push Docker image on Docker Hub"
-    depends: [version]
+    depends: [init, version]
     steps:
     - $: >
         docker buildx build
-        --builder multi-platform-builder
+        --builder ={BUILDER}
         --platform linux/amd64,linux/arm64
         --tag '={DOCKER_NAME}:={VERSION}'
         --tag '={DOCKER_NAME}:latest'
