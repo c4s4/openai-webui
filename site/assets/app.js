@@ -338,6 +338,7 @@ async function loadModels() {
       modelSelect.value = defaultModel(models, wantedDefault);
     }
     showFullModelName();
+    probeEffortLevels(modelSelect.value);
   } catch (error) {
     modelSelect.innerHTML = "";
     const option = document.createElement("option");
@@ -436,6 +437,7 @@ function showFullModelName() {
 modelSelect.addEventListener("change", () => {
   remember(MODEL_STORAGE_KEY, modelSelect.value);
   showFullModelName();
+  probeEffortLevels(modelSelect.value);
 });
 
 /* --------------------------------------------------------------- pdf mode */
@@ -488,6 +490,155 @@ thinkModeSelect.addEventListener("change", () => {
   // another: touching the menu gives them a fresh chance.
   noThinkingSupported = true;
 });
+
+/* ---------------------------------------------------- thinking effort menu */
+
+/**
+ * The levels of the reasoning-effort menu are discovered rather than assumed:
+ * a backend accepts `reasoning_effort` with a value no two models share, and
+ * refuses the others. The refusal is useful twice over — an unsupported value
+ * comes back listing the supported ones — but it is not enough on its own:
+ * some backends validate a value in the request schema and then crash on it,
+ * so every candidate is checked with a one-token request before it is offered.
+ *
+ * The discovery runs once per model and per session, cached in memory because
+ * each check is a real completion and the backend is unlikely to change its
+ * mind mid-session. It never starts in front of an ongoing generation, and it
+ * never blocks the page: the menu fills when the tests are over.
+ */
+
+/** i18n key per known level; an unknown one is shown under its own name. */
+const EFFORT_KEYS = new Map([
+  ["minimal", "think.minimal"],
+  ["low", "think.low"],
+  ["medium", "think.medium"],
+  ["high", "think.high"],
+  ["xhigh", "think.xhigh"],
+  ["max", "think.max"],
+]);
+
+/** The payload every discovery call is built from — cheap by design. */
+const EFFORT_PROBE = {
+  messages: [{ role: "user", content: "ping" }],
+  stream: false,
+  max_tokens: 1,
+};
+
+/** Discovered levels per model id; a model is absent until it has been probed. */
+const effortLevels = new Map();
+
+/**
+ * The supported values a 400 refuses with, read out of its message. The shape
+ * is pydantic's — `Input should be 'none', 'low', … or 'xhigh'` — and only the
+ * part after `should be` is read, so a quoted string elsewhere in the message
+ * cannot pollute the list. A message in any other shape leaves the menu as it is.
+ */
+function parseEffortList(message) {
+  const intro = message.indexOf("should be ");
+  if (intro < 0) return [];
+  return [...message.slice(intro).matchAll(/'([^']*)'/g)].map((match) => match[1]);
+}
+
+/**
+ * Whether a candidate is really usable: a request carrying it must answer 200.
+ * The verification exists exactly for the backends that accept a value in the
+ * schema and fail on it at inference time (LLaMA.cpp answers a 500 here for
+ * `high` while quietly serving `medium`) — those are kept out of the menu.
+ */
+async function verifyEffort(modelId, value) {
+  try {
+    const response = await fetch(`${API_BASE}/chat/completions`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ model: modelId, ...EFFORT_PROBE, reasoning_effort: value }),
+    });
+    return response.ok;
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Discovers the levels of one model, in two passes: the names from a refused
+ * value nobody accepts, then the ones a one-token request actually answers.
+ * `none` is not offered: turning the thinking off is what the Off toggle does.
+ */
+async function discoverEffortLevels(modelId) {
+  let candidates = [];
+  try {
+    const response = await fetch(`${API_BASE}/chat/completions`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ model: modelId, ...EFFORT_PROBE, reasoning_effort: "__never_set__" }),
+    });
+    const body = await response.json().catch(() => null);
+    if (response.status === 400 && body?.error?.message) {
+      candidates = parseEffortList(body.error.message);
+    }
+  } catch {
+    return [];
+  }
+
+  const levels = [];
+  for (const value of candidates) {
+    if (value === "none") continue;
+    if (await verifyEffort(modelId, value)) levels.push(value);
+  }
+  return levels;
+}
+
+/** Larger than any earlier probe token: a probe whose token is stale renders nothing. */
+let effortProbeToken = 0;
+
+/**
+ * Starts the discovery for a model, or reuses the one already cached, then
+ * shows it in the menu. A second call for the same model while the first probe
+ * is running is dropped by the token check below.
+ */
+async function probeEffortLevels(modelId) {
+  if (!modelId || busy) return;
+  if (effortLevels.has(modelId)) {
+    renderEffortLevels(modelId);
+    return;
+  }
+
+  const token = ++effortProbeToken;
+  const levels = await discoverEffortLevels(modelId);
+  if (token !== effortProbeToken) return; // a newer probe has superseded it
+  effortLevels.set(modelId, levels);
+  if (modelSelect.value === modelId) renderEffortLevels(modelId);
+}
+
+/**
+ * Refills the thinking menu with the discovered levels, between Auto and Off.
+ * Every level option carries data-effort, which is also what the re-render
+ * uses to tell the dynamic options apart from the two static ones; known
+ * levels carry an i18n key, so a language change re-labels them with the rest
+ * of the page. A level picked for a previous model that this one does not
+ * offer is let go, back to Auto.
+ */
+function renderEffortLevels(modelId) {
+  for (const option of thinkModeSelect.querySelectorAll("option[data-effort]")) option.remove();
+
+  for (const level of effortLevels.get(modelId) ?? []) {
+    const option = document.createElement("option");
+    option.value = level;
+    option.dataset.effort = "";
+    const key = EFFORT_KEYS.get(level);
+    if (key) {
+      option.dataset.i18n = key;
+      option.textContent = t(key);
+    } else {
+      option.textContent = level;
+    }
+    thinkModeSelect.insertBefore(option, thinkModeSelect.querySelector('option[value="off"]'));
+  }
+
+  const picked = thinkModeSelect.value;
+  if (picked !== "auto" && picked !== "off" && !(effortLevels.get(modelId) ?? []).includes(picked)) {
+    thinkModeSelect.value = "auto";
+  }
+}
 
 /* ----------------------------------------------------------- attachments */
 
@@ -782,12 +933,13 @@ function buildUserContent(text, files) {
 /* --------------------------------------------------------------- request */
 
 /**
- * Sends the completion request. Two of the parameters are optional extras a
+ * Sends the completion request. Three of the parameters are optional extras a
  * backend may refuse with a 400: `stream_options`, which asks for a final chunk
- * with the token counts, and the fields turning reasoning off. On a 400 they are
- * dropped one at a time to find the culprit — the token counts first, since
- * losing them only costs an estimate from the chunk count, while losing the
- * thinking switch changes the answer and is worth a message.
+ * with the token counts, a chosen reasoning effort, and the fields turning
+ * reasoning off. On a 400 they are dropped one at a time to find the culprit —
+ * the token counts first, since losing them only costs an estimate from the
+ * chunk count, while losing the effort or the thinking switch changes the
+ * answer and is worth a message.
  *
  * Each refusal is remembered for the rest of the session, so the search happens
  * once per backend and not on every message.
@@ -802,23 +954,45 @@ async function postCompletion() {
     });
 
   const usage = usageSupported ? { stream_options: { include_usage: true } } : {};
+  const effort =
+    thinkModeSelect.value !== "auto" && thinkModeSelect.value !== "off"
+      ? { reasoning_effort: thinkModeSelect.value }
+      : {};
   const noThinking = thinkModeSelect.value === "off" && noThinkingSupported ? NO_THINKING : {};
 
-  const response = await send({ ...usage, ...noThinking });
+  const response = await send({ ...usage, ...effort, ...noThinking });
   if (response.status !== 400) return response;
 
   // Only remember a fallback if dropping the extra really is what fixed the
   // request, not an unrelated 400 (bad model, oversized input…).
   if (usageSupported) {
-    const retry = await send({ ...noThinking });
+    const retry = await send({ ...effort, ...noThinking });
     if (retry.ok) {
       usageSupported = false;
       return retry;
     }
   }
 
+  if (Object.keys(effort).length > 0) {
+    const retry = await send({ ...usage, ...noThinking });
+    if (retry.ok) {
+      // The menu was verified ahead of time, so this is a backend that changed
+      // its mind: the level is let go and the choice is back to Auto.
+      thinkModeSelect.value = "auto";
+      return retry;
+    }
+    if (usageSupported) {
+      const bare = await send({ ...noThinking });
+      if (bare.ok) {
+        usageSupported = false;
+        thinkModeSelect.value = "auto";
+        return bare;
+      }
+    }
+  }
+
   if (Object.keys(noThinking).length > 0) {
-    const retry = await send({ ...usage });
+    const retry = await send({ ...usage, ...effort });
     if (retry.ok) {
       noThinkingSupported = false;
       thinkingRefused = true;
@@ -826,7 +1000,7 @@ async function postCompletion() {
     }
     // Neither alone was enough: try without both before giving up.
     if (usageSupported) {
-      const bare = await send({});
+      const bare = await send({ ...effort });
       if (bare.ok) {
         usageSupported = false;
         noThinkingSupported = false;
