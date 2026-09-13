@@ -562,6 +562,8 @@ async function verifyEffort(modelId, value) {
  * Discovers the levels of one model, in two passes: the names from a refused
  * value nobody accepts, then the ones a one-token request actually answers.
  * `none` is not offered: turning the thinking off is what the Off toggle does.
+ * Returns `null` when the backend did not answer the probe at all, so the
+ * caller leaves nothing cached and a later probe can try again.
  */
 async function discoverEffortLevels(modelId) {
   let candidates = [];
@@ -574,9 +576,11 @@ async function discoverEffortLevels(modelId) {
     const body = await response.json().catch(() => null);
     if (response.status === 400 && body?.error?.message) {
       candidates = parseEffortList(body.error.message);
+    } else if (!response.ok) {
+      return null; // not the refusal the probe knows how to read
     }
   } catch {
-    return [];
+    return null;
   }
 
   const levels = [];
@@ -605,6 +609,7 @@ async function probeEffortLevels(modelId) {
   const token = ++effortProbeToken;
   const levels = await discoverEffortLevels(modelId);
   if (token !== effortProbeToken) return; // a newer probe has superseded it
+  if (levels === null) return; // the backend did not answer: try again next time
   effortLevels.set(modelId, levels);
   if (modelSelect.value === modelId) renderEffortLevels(modelId);
 }
