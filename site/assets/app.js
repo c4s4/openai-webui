@@ -18,6 +18,8 @@ const ALIASES_URL = "/aliases";
 const DEFAULT_MODEL_URL = "/default-model";
 /** What to leave out of the menu, likewise served out of `OPENAI_MODEL_IGNORE`. */
 const IGNORED_MODELS_URL = "/ignored-models";
+/** What to keep in the menu, likewise served out of `OPENAI_MODEL_EXPOSE`. */
+const EXPOSED_MODELS_URL = "/exposed-models";
 /** Where the picked model is remembered, next to the language key of i18n.js. */
 const MODEL_STORAGE_KEY = "openai-webui.model";
 const MAX_FILE_BYTES = 20 * 1024 * 1024;
@@ -217,7 +219,9 @@ function modelLabel(id) {
 }
 
 /**
- * Reads the `whisper-1, tts-*, *-embedding-*` list into one matcher per entry.
+ * Reads a comma-separated pattern list — `whisper-1, tts-*, *-embedding-*`, the
+ * form `OPENAI_MODEL_EXPOSE` and `OPENAI_MODEL_IGNORE` both share — into one
+ * matcher per entry.
  *
  * A `*` stands for any run of characters, and is what makes the setting usable
  * at all against an API whose catalogue is mostly not chat models: OpenAI alone
@@ -230,7 +234,7 @@ function modelLabel(id) {
  * Case is ignored, since nothing here is ever sent to the backend — a pattern
  * that fails on capitalisation alone would silently leave the menu as it was.
  */
-function parseIgnoreList(text) {
+function parsePatternList(text) {
   const patterns = [];
   for (const entry of text.split(",")) {
     const pattern = entry.trim();
@@ -242,40 +246,47 @@ function parseIgnoreList(text) {
 }
 
 /**
- * The models the menu is built from: what the API offered, less what
- * `OPENAI_MODEL_IGNORE` matches.
+ * Says, in the console, which patterns match no model the API answered with.
  *
- * Filtering here rather than anywhere else is what makes the rest of the page
- * follow without knowing about the setting: the fold of aliases, the default of
- * a first visit and the remembered choice are all decided on this list, so a
- * model that has just been ignored is simply a model the backend no longer
- * offers as far as they are concerned.
- *
- * An entry matching nothing is said in the console, for the same reason an
- * orphan alias is: the symptom of a mistyped pattern is a menu that looks
- * exactly as it did before, so nothing else would ever point at it.
+ * A pattern matching nothing has no visible effect at all — loaded, it changes
+ * the menu exactly as little as mistyped — so this is the only place the
+ * mistake can be named; the console is where it belongs, since it concerns
+ * whoever wrote the `.env` file, not whoever is chatting.
  */
+function warnIdlePatterns(models, patterns, setting) {
+  const idle = patterns.filter((entry) => !models.some((model) => entry.regexp.test(model.id)));
+  if (idle.length === 0) return;
+  const named = idle.map((entry) => `"${entry.pattern}"`).join(", ");
+  console.warn(`${setting}: nothing matches ${named} — entry has no effect`);
+}
+
+/**
+ * The models `OPENAI_MODEL_EXPOSE` keeps of the API catalogue, `OPENAI_MODEL_IGNORE`
+ * taking a few of those back out. An empty list of patterns keeps everything.
+ * The two filters are deliberately pure: the idle-pattern warnings are drawn
+ * against the whole catalogue, only where a pattern matching nothing means a
+ * typo rather than a model the other setting has already taken out.
+ */
+function exposedModels(models, expose) {
+  if (expose.length === 0) return models;
+  return models.filter((model) => expose.some((entry) => entry.regexp.test(model.id)));
+}
+
 function keptModels(models, ignore) {
   if (ignore.length === 0) return models;
-
-  const idle = ignore.filter((entry) => !models.some((model) => entry.regexp.test(model.id)));
-  if (idle.length > 0) {
-    const named = idle.map((entry) => `"${entry.pattern}"`).join(", ");
-    console.warn(`OPENAI_MODEL_IGNORE: nothing matches ${named} — entry has no effect`);
-  }
-
   return models.filter((model) => !ignore.some((entry) => entry.regexp.test(model.id)));
 }
 
 async function loadModels() {
   try {
-    // All four are wanted before the list is drawn, and none depends on the
+    // All five are wanted before the list is drawn, and none depends on the
     // others, so they travel together.
-    const [response, aliasSetting, wantedDefault, ignoreSetting] = await Promise.all([
+    const [response, aliasSetting, wantedDefault, ignoreSetting, exposeSetting] = await Promise.all([
       fetch(`${API_BASE}/models`),
       fetchSetting(ALIASES_URL),
       fetchSetting(DEFAULT_MODEL_URL),
       fetchSetting(IGNORED_MODELS_URL),
+      fetchSetting(EXPOSED_MODELS_URL),
     ]);
     if (!response.ok) throw new Error(await describeError(response));
     modelAliases = parseAliases(aliasSetting);
@@ -283,10 +294,23 @@ async function loadModels() {
     const offered = (await response.json()).data ?? [];
     if (offered.length === 0) throw new Error(t("model.none"));
 
-    // Told apart from an empty answer above, since the two call for opposite
-    // things: a backend serving nothing needs looking at, a menu emptied by the
-    // ignore list needs the list shortened.
-    const models = keptModels(offered, parseIgnoreList(ignoreSetting));
+    // Expose first, ignore second: the allowlist narrows the API catalogue
+    // down to what belongs in the menu, and the ignore list takes a few of
+    // those back out. Kept apart, the two settings can also empty the menu for
+    // opposite reasons — a list matching nothing needs correcting, a list
+    // trimming too hard needs shortening — hence the separate messages.
+    const expose = parsePatternList(exposeSetting);
+    const ignore = parsePatternList(ignoreSetting);
+    // Idle patterns are spotted against the whole catalogue, before either
+    // filter runs: one matching nothing here is mistyped, while one matching
+    // only models the other setting takes out is simply redundant.
+    warnIdlePatterns(offered, expose, "OPENAI_MODEL_EXPOSE");
+    warnIdlePatterns(offered, ignore, "OPENAI_MODEL_IGNORE");
+
+    let models = exposedModels(offered, expose);
+    if (models.length === 0) throw new Error(t("model.allExposed"));
+
+    models = keptModels(models, ignore);
     if (models.length === 0) throw new Error(t("model.allIgnored"));
 
     // Sorted on what is shown, not on the identifier: an alphabetical menu that
@@ -362,7 +386,15 @@ function fillAliasList(models) {
  */
 function defaultModel(models, wanted) {
   if (wanted) {
-    const named = models.find((model) => model.id === wanted || modelAliases.get(model.id) === wanted);
+    // Compared lowercased on both sides, for the same reason the patterns are:
+    // an id is full of capitals that only the backend cares about — `mlx-community/qwen3.8-27b-bf16`
+    // may well come back as `mlx-community/Qwen3.8-27B-bf16` — and nothing here
+    // is ever sent as configured.
+    const wantedLower = wanted.toLowerCase();
+    const named = models.find((model) => {
+      const label = modelAliases.get(model.id);
+      return model.id.toLowerCase() === wantedLower || (label && label.toLowerCase() === wantedLower);
+    });
     if (named) return named.id;
     console.warn(
       `OPENAI_MODEL: the menu holds no model or alias named "${wanted}" — starting on another one`,
@@ -871,6 +903,13 @@ async function streamCompletion(turn) {
     for await (const data of readSse(response.body)) {
       if (data === "[DONE]") break;
       const chunk = JSON.parse(data);
+      // A backend that fails mid-stream, with the connection already open, has
+      // no status code left to reply with: it sends an event carrying an error
+      // object instead. Say what it said rather than finishing on an empty
+      // answer the next event (or [DONE]) would otherwise produce.
+      if (chunk.error) {
+        throw new Error(typeof chunk.error === "string" ? chunk.error : chunk.error.message ?? "API error");
+      }
       if (chunk.usage) usage = chunk.usage;
 
       const delta = chunk.choices?.[0]?.delta;

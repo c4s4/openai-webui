@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- `OPENAI_MODEL_EXPOSE` keeps only the matching models in the menu, as the same comma-separated identifier list with `*` wildcards as `OPENAI_MODEL_IGNORE`; set together, the expose list narrows the catalogue down and the ignore list takes a few of those back out.
 - Renamed `OPENAI_API_BASE_URL` to `OPENAI_BASE_URL` and `OPENAI_MODEL_DEFAULT` to `OPENAI_MODEL`, the standard names of the OpenAI SDKs.
 
 
