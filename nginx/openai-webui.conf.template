@@ -109,10 +109,16 @@ server {
         proxy_ssl_verify_depth 3;
         proxy_ssl_trusted_certificate /etc/ssl/certs/ca-certificates.crt;
 
-        # Token streaming: no buffering, and room for slow completions.
+        # Token streaming: no buffering, and room for slow completions. The
+        # client-side send timeout matters just as much as the proxy ones: while
+        # the model is thinking, the upstream emits no SSE chunk for a while and
+        # an unset send_timeout (default 60s) would cut the browser off, which
+        # is exactly the failure we are guarding against.
         proxy_buffering off;
         proxy_cache off;
+        proxy_connect_timeout 600s;
         proxy_read_timeout 600s;
         proxy_send_timeout 600s;
+        send_timeout 600s;
     }
 }
